@@ -1,0 +1,125 @@
+name: Integration Tests
+
+on:
+  #  schedule:
+  #    - cron: '00 08 * * 1-5'
+
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+        description: Select the Environment
+      canary:
+        description: 'run the tests on canary version'
+        required: false
+        type: boolean
+        default: false
+      notify:
+        description: 'notify result with slack message'
+        required: false
+        type: boolean
+        default: true
+
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        required: true
+        type: choice
+        description: Select the Environment
+        options:
+          - local
+          - dev
+          - uat
+      canary:
+        description: 'run the tests on canary version'
+        required: false
+        type: boolean
+        default: false
+      notify:
+        description: 'notify result with slack message'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write
+  contents: read
+  deployments: write
+
+
+jobs:
+
+  integration_test:
+    name: Test ${{(github.event.inputs == null && 'dev') || inputs.environment }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@1f9a0c22da41e6ebfa534300ef656657ea2c6707
+
+      - name: setup
+        id: setup
+        run: |
+          echo "CLIENT_ID=${{secrets.DEV_CLIENT_ID}}" >> $GITHUB_ENV 
+          echo "TENANT_ID=${{secrets.DEV_TENANT_ID}}" >> $GITHUB_ENV 
+          echo "SUBSCRIPTION_ID=${{secrets.DEV_SUBSCRIPTION_ID}}" >> $GITHUB_ENV 
+          echo "SUBKEY=${{secrets.DEV_SUBKEY}}" >> $GITHUB_ENV 
+          
+          if [[ ${{ inputs.environment }} == "uat" ]]; then
+            echo "CLIENT_ID=${{secrets.UAT_CLIENT_ID}}" >> $GITHUB_ENV 
+            echo "TENANT_ID=${{secrets.UAT_TENANT_ID}}" >> $GITHUB_ENV 
+            echo "SUBSCRIPTION_ID=${{secrets.UAT_SUBSCRIPTION_ID}}" >> $GITHUB_ENV 
+            echo "SUBKEY=${{secrets.UAT_SUBKEY}}" >> $GITHUB_ENV 
+          fi
+
+      - name: Login
+        id: login
+        # from https://github.com/Azure/login/commits/master
+        uses: azure/login@92a5484dfaf04ca78a94597f4f19fea633851fa2
+        with:
+          client-id: ${{ env.CLIENT_ID }}
+          tenant-id: ${{ env.TENANT_ID }}
+          subscription-id: ${{ env.SUBSCRIPTION_ID }}
+
+
+      - name: Run Service on Docker
+        shell: bash
+        id: run_service_docker
+        run: |
+          cd ./docker
+          chmod +x ./run_docker.sh
+          ./run_docker.sh ${{ inputs.environment }}
+  
+
+      - name: Run Integration Tests
+        shell: bash
+        run: |
+          export SUBKEY=${{ env.SUBKEY }}
+          export CANARY=${{ inputs.canary }}
+          export CUCUMBER_PUBLISH_TOKEN=${{ secrets.CUCUMBER_PUBLISH_TOKEN }}
+
+          cd ./integration-test
+          chmod +x ./run_integration_test.sh
+          ./run_integration_test.sh ${{( github.event.inputs == null && 'dev') || inputs.environment }}
+
+  notify:
+    needs: [ integration_test ]
+    runs-on: ubuntu-latest
+    name: Notify
+    if: ${{ always() && inputs.notify == 'true' }}
+    steps:
+      - name: Report Status
+        uses: ravsamhq/notify-slack-action@be814b201e233b2dc673608aa46e5447c8ab13f2 # v2
+        with:
+          status: ${{ needs.integration_test.result }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          notify_when: 'failure,skipped'
+          notification_title: 'Integration Tests Result'
+          message_format: '{emoji} <{run_url}|{workflow}> {status_message} in <{repo_url}|{repo}> in ${{ inputs.environment }}'
+          footer: 'Linked to <{workflow_url}| workflow file>'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_TEST }}
+
+

@@ -1,0 +1,91 @@
+name: Check PR
+
+# Controls when the workflow will run
+on:
+  merge_group:
+  pull_request:
+    branches:
+      - main
+      - next
+    types: [ opened, synchronize, labeled, unlabeled, reopened, edited ]
+
+
+permissions:
+  contents: read
+  checks: write
+  issues: write
+  pull-requests: write
+
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  auto_assign:
+    name: Auto Assign
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - name: Assign Me
+        # You may pin to the exact commit or the version.
+        uses: kentaro-m/auto-assign-action@746a3a558fdd0e061f612ec9f8ff1b8a19c1a115 # v1.2.1
+        with:
+          configuration-path: '.github/auto_assign.yml'
+
+  check_labels:
+    name: Check Required Labels
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4 # required to make the script available for next step
+      - name: Verify PR Labels
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'major') && !contains(github.event.pull_request.labels.*.name, 'minor') && !contains(github.event.pull_request.labels.*.name, 'patch') && !contains(github.event.pull_request.labels.*.name, 'patch') && !contains(github.event.pull_request.labels.*.name, 'skip') }}
+        uses: actions/github-script@d556feaca394842dc55e4734bf3bb9f685482fa0 # v6.3.3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const script = require('./.github/workflows/github_scripts/check_required_labels.js')
+            script({github, context, core})
+
+
+  formatter:
+    name: Formatter
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4
+      - uses: actions/setup-java@3a4f6e1af504cf6a31855fa899c6aa5355ba6c12 # v4
+        with:
+          distribution: 'temurin' # See 'Supported distributions' for available options
+          java-version: '21'
+      - name: Find incorrectly formatted file
+        uses: axel-op/googlejavaformat-action@v3
+        with:
+          args: "--replace"
+          skip-commit: true
+      - name: Print diffs
+        run: git --no-pager diff
+      - name: suggester / google-java-format
+        uses: reviewdog/action-suggester@a3026c6020837c23b61a79d12db223a00df19e6a # v1
+        with:
+          tool_name: google-java-format
+          fail_on_error: true
+
+  check_size:
+    runs-on: ubuntu-latest
+    name: Check Size
+    if: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
+        with:
+          fetch-depth: 0
+      - name: Check Size
+        uses: actions/github-script@d556feaca394842dc55e4734bf3bb9f685482fa0 # v6.3.3
+        env:
+          IGNORED_FILES: openapi.json
+          BRANCH_NAME: ${{ github.head_ref}}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const script = require('./.github/workflows/github_scripts/check_size.js')
+            await script({github, context, core})
+

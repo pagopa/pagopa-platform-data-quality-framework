@@ -1,0 +1,72 @@
+name: Update Code
+
+on:
+  issue_comment:
+    types: [created, edited]
+
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  update_code:
+    name: Update Code
+    runs-on: ubuntu-latest
+    if: ${{ contains(github.event.comment.body, 'update_code') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
+        with:
+          ref: ${{ github.ref_name}}
+          token: ${{ secrets.BOT_TOKEN_GITHUB }}
+      - name: Setup JDK
+        uses: actions/setup-java@3a4f6e1af504cf6a31855fa899c6aa5355ba6c12 # v4
+        with:
+          distribution: 'temurin' # See 'Supported distributions' for available options
+          java-version: '21'
+      - name: Update OpenApi/Swagger file
+        run: |
+          cd ./openapi
+          chmod +x ./generate_openapi.sh
+          ./generate_openapi.sh
+      - name: Google Java Format
+        uses: axel-op/googlejavaformat-action@v3
+        with:
+          args: "--replace"
+          commit-message: "Openapi + Google Java Format [skip-ci]"
+
+  notify:
+    needs: [ update ]
+    runs-on: ubuntu-latest
+    name: Notify
+    if: ${{ always() && contains(needs.*.result, 'failure') }}
+    steps:
+      - name: Notify if Failure
+        uses: actions/github-script@d556feaca394842dc55e4734bf3bb9f685482fa0 # v6.3.3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            var comments = await github.rest.issues.listComments({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo
+            });
+            for (const comment of comments.data) {
+              if (comment.body.includes('Update Code is failed. Please retry.')){
+                github.rest.issues.deleteComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: comment.id
+                })
+              }
+            }
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: 'Update Code is failed. Please retry.'
+            })
+            core.setFailed('Update Code is failed. Please retry.')

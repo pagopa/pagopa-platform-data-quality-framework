@@ -1,0 +1,60 @@
+name: Code Review
+
+# Controls when the workflow will run
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+  push:
+    branches:
+      - main
+
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+env:
+  PROJECT_KEY: # TODO
+
+permissions:
+  id-token: write
+  contents: read
+  deployments: write
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  code-review:
+    name: Code Review
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      - name: Test and Coverage
+        uses: pagopa/github-actions-template/maven-code-review@b134fb7af9a4d8b9b933eafb5cf5e12d88ee8ff1 # v2.2.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          sonar_token: ${{ secrets.SONAR_TOKEN }}
+          project_key: ${{env.PROJECT_KEY}}
+          coverage_exclusions: "**/config/*,**/*Mock*,**/model/**,**/entity/*,**/exception/**"
+          cpd_exclusions: "**/model/**,**/entity/*"
+          java_version: 17
+
+      - name: suggester / junit
+        uses: reviewdog/action-suggester@a3026c6020837c23b61a79d12db223a00df19e6a # v1
+        with:
+          tool_name: junit
+
+  smoke_test:
+    name: Smoke Test
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+    uses: ./.github/workflows/ci_integration_test.yml
+    with:
+      environment: 'local'
+      notify: false
+    secrets: inherit
+
