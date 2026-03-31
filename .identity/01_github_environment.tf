@@ -21,7 +21,7 @@ resource "github_repository_environment" "github_repository_environment" {
 
 locals {
   env_secrets = {
-    "CLIENT_ID" : data.azurerm_user_assigned_identity.identity_cd_01.client_id,
+    # "CLIENT_ID" : data.azurerm_user_assigned_identity.identity_cd_01.client_id,
     "TENANT_ID" : data.azurerm_client_config.current.tenant_id,
     "SUBSCRIPTION_ID" : data.azurerm_subscription.current.subscription_id,
     "SUBKEY" : data.azurerm_key_vault_secret.key_vault_integration_test_subkey.value,
@@ -32,31 +32,31 @@ locals {
     "CLUSTER_NAME" : local.aks_cluster.name,
     "CLUSTER_RESOURCE_GROUP" : local.aks_cluster.resource_group_name,
     "NAMESPACE" : local.domain,
-    "WORKLOAD_IDENTITY_ID": data.azurerm_user_assigned_identity.workload_identity_clientid.client_id
+    # "WORKLOAD_IDENTITY_ID" : data.azurerm_user_assigned_identity.workload_identity_clientid.client_id,
   }
   repo_secrets = {
     "SONAR_TOKEN" : data.azurerm_key_vault_secret.key_vault_sonar.value,
     "BOT_TOKEN_GITHUB" : data.azurerm_key_vault_secret.key_vault_bot_token.value,
     "CUCUMBER_PUBLISH_TOKEN" : data.azurerm_key_vault_secret.key_vault_cucumber_token.value,
   }
-  special_repo_secrets = {
-    "CLIENT_ID" : {
-      "key" : "${upper(var.env)}_CLIENT_ID",
-      "value" : data.azurerm_user_assigned_identity.identity_pr_01.client_id
-    },
-    "TENANT_ID" : {
-      "key" : "${upper(var.env)}_TENANT_ID",
-      "value" : data.azurerm_user_assigned_identity.identity_pr_01.tenant_id
-    },
-    "SUBSCRIPTION_ID" : {
-      "key" : "${upper(var.env)}_SUBSCRIPTION_ID",
-      "value" : data.azurerm_subscription.current.subscription_id
-    },
-    "SUBKEY" : {
-      "key" : "${upper(var.env)}_SUBKEY",
-      "value" : data.azurerm_key_vault_secret.key_vault_integration_test_subkey.value
-    },
-  }
+  # special_repo_secrets = {
+  #   "CLIENT_ID" : {
+  #     "key" : "${upper(var.env)}_CLIENT_ID",
+  #     "value" : data.azurerm_user_assigned_identity.identity_pr_01.client_id
+  #   },
+  #   "TENANT_ID" : {
+  #     "key" : "${upper(var.env)}_TENANT_ID",
+  #     "value" : data.azurerm_user_assigned_identity.identity_pr_01.tenant_id
+  #   },
+  #   "SUBSCRIPTION_ID" : {
+  #     "key" : "${upper(var.env)}_SUBSCRIPTION_ID",
+  #     "value" : data.azurerm_subscription.current.subscription_id
+  #   },
+  #   "SUBKEY" : {
+  #     "key" : "${upper(var.env)}_SUBKEY",
+  #     "value" : data.azurerm_key_vault_secret.key_vault_integration_test_subkey.value
+  #   },
+  # }
 }
 
 ###############
@@ -96,10 +96,12 @@ resource "github_actions_secret" "repo_secrets" {
   plaintext_value = each.value
 }
 
+# resource "github_actions_secret" "special_repo_secrets" {
+#   for_each        = local.special_repo_secrets
+#   repository      = local.github.repository
+#   secret_name     = each.value.key
+#   plaintext_value = each.value.value
+# }
 
-resource "github_actions_secret" "special_repo_secrets" {
-  for_each        = local.special_repo_secrets
-  repository      = local.github.repository
-  secret_name     = each.value.key
-  plaintext_value = each.value.value
-}
+
+
