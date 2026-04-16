@@ -38,3 +38,14 @@ hs_err_pid*
 # Helm
 /helm/charts/*
 **/.terraform/
+
+
+# --- File temporanei di PySpark ---
+derby.log
+metastore_db/
+spark-warehouse/
+
+.env
+__pycache__/
+*.pyc
+.pytest_cache/

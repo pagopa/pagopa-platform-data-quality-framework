@@ -1,0 +1,21 @@
+# --- Strumenti di sviluppo ---
+flake8
+
+# --- Motore Dati e Configurazione ---
+# Motore di elaborazione dati per gestire i DataFrame mock
+pyspark==3.5.8
+
+# Permette a Python di leggere i contratti scritti in YAML
+pyyaml==6.0.1
+
+# --- Ecosistema Soda (Data Quality) ---
+# Motore centrale per eseguire i test di qualità sui dati
+soda-core==3.5.6
+
+# Connettori per permettere a Soda di leggere i dati direttamente da PySpark
+soda-core-spark-df==3.5.6
+soda-core-spark==3.5.6
+
+# --- Gestione Contratti ---
+# CLI per validare la correttezza dei file YAML (Data Contracts)
+datacontract-cli==0.11.6

@@ -94,3 +94,46 @@ Made with ❤️ by PagoPa S.p.A.
 ### Maintainers
 
 See `CODEOWNERS` file
+
+
+
+# 📊 GPD Data Quality Local
+
+Questo progetto fornisce un ambiente standardizzato per l'esecuzione di controlli di qualità dei dati utilizzando **Soda Core** e **Apache Spark (PySpark)**. È progettato per essere eseguito localmente tramite **Dev Containers**.
+
+### 1. Generazione Dati (`mock_data_setup.py`)
+Prima di testare la qualità, il sistema deve avere dei dati. Questo script:
+* Inizializza una **Spark Session** locale.
+* Legge i **Data Contracts** (file YAML) per capire lo schema atteso (nomi delle colonne, tipi di dati).
+* Genera programmaticamente dati sintetici ("Mock Data") che rispettano quegli schemi.
+
+### 2. Controllo Qualità e Reporting (`data_quality.py`)
+* Si connette ai dati generati tramite Spark.
+* Esegue una **Soda Scan** basata sui file di configurazione e sui contratti.
+* **Controlli eseguiti:** Verifica l'assenza di valori nulli, l'univocità delle chiavi primarie, la correttezza dei formati e la conformità degli schemi.
+* **Integrazione Cloud:** Se configurato con le API Key nel file `.env`, invia i risultati direttamente alla dashboard di **Soda Cloud**, permettendo il monitoraggio storico dei test.
+
+---
+
+## 🚀 Guida all'avvio rapido
+
+### 1. Prerequisiti
+* **Docker Desktop**
+* **VS Code** con estensione **Dev Containers** installata.
+
+### 2. Setup delle credenziali
+Crea un file `.env` nella cartella root (verrà ignorato da Git):
+env
+SODA_HOST=cloud.soda.io
+SODA_API_KEY=le_tue_chiavi_soda
+SODA_API_SECRET=il_tuo_secret_soda
+
+
+### 3. Apertura dell'Ambiente (Dev Container)
+* Apri la cartella del progetto con VS Code.
+* Clicca sul tasto verde in basso a sinistra (><) oppure premi F1 e digita: Dev Containers: Reopen in Container.
+* Attendi il completamento della build. Quando vedrai il terminale con root@..., l'ambiente sarà pronto.
+
+### 4. Utilizzo del Makefile
+Una volta dentro il container, Esegui Pipeline Completa (Mock + Quality):
+* make run-soda

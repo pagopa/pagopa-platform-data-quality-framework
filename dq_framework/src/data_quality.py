@@ -1,5 +1,4 @@
 """
-gpd_quality_pipeline.py
 Pipeline di data quality per i Data Contract GPD — Silver Layer.
 Compatibile con job CDE (Cloudera Data Engineering).
 
@@ -49,9 +48,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ── Configurazione Variabili d'Ambiente ────────────────────────────────────────
-CONTRACTS_PATH = os.getenv("GPD_CONTRACTS_PATH", "/app/mount/")
-TABLE_LIMIT    = int(os.getenv("GPD_TABLE_LIMIT", "50"))
-DATA_SOURCE    = os.getenv("GPD_DATA_SOURCE", "my_spark")
+CONTRACTS_PATH = os.getenv("CONTRACTS_PATH", "/app/mount/")
+TABLE_LIMIT    = int(os.getenv("TABLE_LIMIT", "200"))
+DATA_SOURCE    = os.getenv("DATA_SOURCE", "ny_spark")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SCHEMA DATAFRAME RISULTATI
@@ -124,13 +123,34 @@ def _parse_contract_file(filepath: str) -> dict | None:
         logger.error(f"File saltato '{filepath}': Il tag 'models' è presente ma vuoto.")
         return None
         
-    dataset = list(models.keys())[0].strip()
+    model_name = list(models.keys())[0].strip()
+    # Legge il dataset reale, se non c'è usa il nome del modello come fallback
+    dataset = models[model_name].get("dataset", model_name).strip()
 
     info       = doc.get("info", {})
     table_name = dataset.split(".")[-1].replace("-", "_")
 
     # Generazione SodaCL delegata all'API Python
-    raw_sodacl = _generate_sodacl(filepath)
+    
+
+    ignore_cli = os.getenv("IGNORE_DATACONTRACT_CLI", "false").lower() == "true"
+
+    if ignore_cli:
+        
+        soda_filepath = "./dq_framework/tests/fixtures/contracts/soda.yml"
+        logger.info(f"IGNORE_DATACONTRACT_CLI=true: Lettura diretta dei controlli dal file {soda_filepath}")
+        try:
+            with open(soda_filepath, "r", encoding="utf-8") as f:
+                raw_sodacl = f.read()
+            
+            logger.info("Lettura da soda.yml riuscita con successo!")
+            logger.info(f"\n{'-'*30} CONTROLLI CARICATI (DEBUG) {'-'*30}\n{raw_sodacl}\n{'-'*88}")
+        except Exception as e:
+            logger.error(f"Errore durante la lettura del file {soda_filepath}: {str(e)}")
+    else:
+        raw_sodacl = _generate_sodacl(filepath)
+
+
     if not raw_sodacl:
         logger.warning(f"File saltato '{filepath}': generazione SodaCL fallita.")
         return None
@@ -143,11 +163,6 @@ def _parse_contract_file(filepath: str) -> dict | None:
         "table_name":       table_name,
         "sodacl":           _normalize_sodacl(raw_sodacl, dataset, table_name),
     }
-
-def load_contracts(contracts_path: str) -> list[dict]:
-    files = sorted(glob(os.path.join(contracts_path, "**/*.yaml"), recursive=True))
-    logger.info(f"Trovati {len(files)} file YAML nel percorso {contracts_path}")
-    return [c for f in files if (c := _parse_contract_file(f))]
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PROCESSOR SODA RESULTS
@@ -238,6 +253,28 @@ def _run_soda_scan(spark: SparkSession, contract: dict) -> list[dict]:
     scan.set_data_source_name(DATA_SOURCE)
     scan.add_spark_session(spark, data_source_name=DATA_SOURCE)
     scan.add_sodacl_yaml_str(contract["sodacl"])
+
+    # ──> CONFIGURAZIONE SODA CLOUD <──
+    soda_api_key = os.getenv("SODA_API_KEY")
+    soda_api_secret = os.getenv("SODA_API_SECRET")
+    soda_host = os.getenv("SODA_HOST", "cloud.soda.io")
+
+    if soda_api_key and soda_api_secret:
+        logger.info("Credenziali Soda Cloud rilevate: invio risultati in corso...")
+        soda_cfg = f"""
+        soda_cloud:
+          host: {soda_host}
+          api_key_id: {soda_api_key}
+          api_key_secret: {soda_api_secret}
+          samples_limit: 100
+        """
+        scan.add_configuration_yaml_str(soda_cfg)
+        
+        # Obbligatorio per Cloud: diamo un nome al workflow/dataset sulla dashboard
+        scan.set_scan_definition_name(contract['contract_title'])
+    else:
+        logger.warning("Credenziali Soda Cloud mancanti: l'esecuzione avverrà solo in locale.")
+
     scan.execute()
 
     return scan.get_scan_results().get("checks", [])
@@ -271,26 +308,23 @@ def _log_results_summary(df_results) -> None:
         logger.info(f"    - Misura   : Valore={row.valore_misurato} | Righe={row.num_righe_controllate}")
     logger.info("=" * 80)
 
-def run_pipeline() -> None:
-    logger.info("Avvio pipeline Data Quality GPD")
-    contracts = load_contracts(CONTRACTS_PATH)
+def run_pipeline(contract_file_path: str) -> None:
+    logger.info(f"Avvio pipeline Data Quality GPD per il file: {contract_file_path}")
     
-    if not contracts:
-        logger.error("Nessun contract valido trovato. Pipeline terminata.")
+    contract = _parse_contract_file(contract_file_path)
+    
+    if not contract:
+        logger.error("Contract non valido o non trovato. Pipeline terminata.")
         return
 
     spark = init_spark()
     all_rows = []
 
-    for contract in contracts:
-        logger.info("+" * 80)
-        logger.info(f"Elaborazione Contract: {contract['contract_title']} ({contract['contract_path']})")
-        
-        checks = _run_soda_scan(spark, contract)
-        if not checks:
-            logger.warning("Nessun check restituito dallo scan, passo al prossimo.")
-            continue
-
+    logger.info("+" * 80)
+    logger.info(f"Elaborazione Contract: {contract['contract_title']} ({contract['contract_path']})")
+    
+    checks = _run_soda_scan(spark, contract)
+    if checks:
         scan_ts = datetime.utcnow()
         rows = process_scan_results(
             scan_checks      = checks,
@@ -303,6 +337,8 @@ def run_pipeline() -> None:
         
         all_rows.extend(rows)
         _log_contract_summary(checks, contract["contract_title"])
+    else:
+        logger.warning("Nessun check restituito dallo scan.")
 
     # Consolidamento e output finale
     if all_rows:
@@ -315,4 +351,9 @@ def run_pipeline() -> None:
     spark.stop()
 
 if __name__ == "__main__":
-    run_pipeline()
+    if len(sys.argv) < 2:
+        print("Errore: percorso del file Data Contract mancante.")
+        sys.exit(1)
+        
+    contract_file_arg = sys.argv[1]
+    run_pipeline(contract_file_arg)

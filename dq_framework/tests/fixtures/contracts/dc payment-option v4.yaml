@@ -1,0 +1,145 @@
+dataContractSpecification: 1.2.1
+id: urn:pagopa:gpd:payment-option-test
+info:
+  title: Payment Option Contract — SILVER
+  description: Contract per la pipeline GPD Quality. Copre tutti i check complessi (P.IVA, Timestamps, Date, etc.)
+  owner: pagoPA QA-Team
+  version: 1.0.0
+
+models:
+  silver_gpd_payment_option:
+    dataset: pagopa.silver_gpd_payment_option
+    description: Modello fisico della tabella silver GPD
+    fields:
+      dl_id:
+        type: int
+      op:
+        type: string
+        required: true
+      ts_ms:
+        type: bigint
+      ts_us:
+        type: bigint
+      ts_ns:
+        type: bigint
+      dl_ingestion_tms:
+        type: bigint
+      dl_event_tms:
+        type: timestamp
+      before:
+        type: string
+      after:
+        type: "struct<id:bigint,payment_position_id:bigint,amount:bigint,description:string,fee:bigint,inserted_date:bigint,is_partial_payment:boolean,iuv:string,organization_fiscal_code:string,status:string,validity_date:bigint,due_date:bigint,retention_date:bigint,last_update_date_notification_fee:bigint>"
+        fields:
+          id:
+            type: bigint
+          payment_position_id:
+            type: bigint
+          amount:
+            type: bigint
+          description:
+            type: string
+          fee:
+            type: bigint
+          inserted_date:
+            type: bigint
+          is_partial_payment:
+            type: boolean
+          iuv:
+            type: string
+          organization_fiscal_code:
+            type: string
+          status:
+            type: string
+          validity_date:
+            type: bigint
+          due_date:
+            type: bigint
+          retention_date:
+            type: bigint
+          last_update_date_notification_fee:
+            type: bigint
+
+    quality:
+      - metric: rowCount
+        mustBeGreaterThan: 10
+        type: library
+
+      - type: sql
+        description: Verifica campi required in after (id, payment_position_id, amount, inserted_date, is_partial_payment, iuv, cf, status)
+        query: |
+          SELECT COUNT(*) as error_count FROM pagopa.silver_gpd_payment_option
+          WHERE op IN ('c', 'u') AND (
+            after.id IS NULL OR
+            after.payment_position_id IS NULL OR
+            after.amount IS NULL OR
+            after.inserted_date IS NULL OR
+            after.is_partial_payment IS NULL OR
+            after.iuv IS NULL OR
+            after.organization_fiscal_code IS NULL OR
+            after.status IS NULL
+          )
+        mustBe: 0
+
+      - type: sql
+        description: Verifica correttezza CF o P.IVA (Regex)
+        query: |
+          SELECT COUNT(*) as error_count FROM pagopa.silver_gpd_payment_option
+          WHERE op IN ('c', 'u') 
+            AND after.organization_fiscal_code IS NOT NULL
+            AND after.organization_fiscal_code NOT RLIKE '^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$'
+            AND after.organization_fiscal_code NOT RLIKE '^[0-9]{11}$'
+        mustBe: 0
+
+      - type: sql
+        description: Verifica lunghezza timestamp (max 16 cifre in microsecondi)
+        query: |
+          SELECT COUNT(*) as error_count FROM pagopa.silver_gpd_payment_option
+          WHERE op IN ('c', 'u') AND (
+            (after.validity_date IS NOT NULL AND LENGTH(CAST(after.validity_date AS STRING)) > 16) OR
+            (after.due_date IS NOT NULL AND LENGTH(CAST(after.due_date AS STRING)) > 16) OR
+            (after.inserted_date IS NOT NULL AND LENGTH(CAST(after.inserted_date AS STRING)) > 16) OR
+            (after.retention_date IS NOT NULL AND LENGTH(CAST(after.retention_date AS STRING)) > 16) OR
+            (after.last_update_date_notification_fee IS NOT NULL AND LENGTH(CAST(after.last_update_date_notification_fee AS STRING)) > 16)
+          )
+        mustBe: 0
+
+      - type: sql
+        description: Verifica Enum su after.status
+        query: |
+          SELECT COUNT(*) as error_count FROM pagopa.silver_gpd_payment_option
+          WHERE op IN ('c', 'u') 
+            AND after.status IS NOT NULL
+            AND after.status NOT IN ('PO_UNPAID', 'PO_PAID', 'PO_UNREPORTED', 'PO_REPORTED', 'PO_PARTIALLY_REPORTED')
+        mustBe: 0
+
+      - type: sql
+        description: Verifica date non superiori a now() + 30 years
+        query: |
+          SELECT COUNT(*) as error_count FROM pagopa.silver_gpd_payment_option
+          WHERE op IN ('c', 'u') AND (
+            (after.validity_date IS NOT NULL AND after.validity_date > cast(to_unix_timestamp(current_timestamp() + interval 30 years) * 1000000 as bigint)) OR
+            (after.due_date IS NOT NULL AND after.due_date > cast(to_unix_timestamp(current_timestamp() + interval 30 years) * 1000000 as bigint)) OR
+            (after.retention_date IS NOT NULL AND after.retention_date > cast(to_unix_timestamp(current_timestamp() + interval 30 years) * 1000000 as bigint))
+          )
+        mustBe: 0
+
+      - type: sql
+        description: Verifica lunghezza IUV (16) e presenza causale
+        query: |
+          SELECT COUNT(*) as error_count FROM pagopa.silver_gpd_payment_option
+          WHERE op IN ('c', 'u') AND (
+            (after.iuv IS NOT NULL AND LENGTH(CAST(after.iuv AS STRING)) != 16) OR
+            (after.description IS NOT NULL AND after.description = '')
+          )
+        mustBe: 0
+
+
+      - type: metric
+        name: silver_gpd_payment_option_test__quality_sql_7 rows
+        fail query: |    # <--- ATTENZIONE: "fail query", non "query"
+          SELECT * FROM pagopa.silver_gpd_payment_option
+          WHERE op IN ('c', 'u') AND (
+            (after.fee IS NOT NULL AND after.fee < 0) OR
+            (after.amount IS NOT NULL AND after.amount <= 0)
+          )

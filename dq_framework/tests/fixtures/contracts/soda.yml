@@ -1,0 +1,32 @@
+checks for silver_gpd_payment_option_test:
+- schema:
+    name: silver_gpd_payment_option_test__dl_id__field_is_present   
+    fail:
+      when required column missing:
+      - dl_id
+    
+- schema:
+    name: silver_gpd_payment_option_test__dl_id__field_type
+    fail:
+      when wrong column type:
+        dl_id: int
+
+- row_count > 0:
+    name: silver_gpd_payment_option_test__row_count
+
+- silver_gpd_payment_option_test__quality_sql_1 = 0:
+    name: silver_gpd_payment_option_test__quality_sql_1
+    silver_gpd_payment_option_test__quality_sql_1 query: "SELECT COUNT(*) as error_count\
+      \ FROM pagopa.silver_gpd_payment_option\nWHERE op IN ('c', 'u') AND (\n  after.id\
+      \ IS NULL OR\n  after.payment_position_id IS NULL OR\n  after.amount IS NULL\
+      \ OR\n  after.inserted_date IS NULL OR\n  after.is_partial_payment IS NULL OR\n\
+      \  after.iuv IS NULL OR\n  after.organization_fiscal_code IS NULL OR\n  after.status\
+      \ IS NULL\n)\n"
+- failed rows: #NON SUPPORTATA DA SODACLI
+    name: silver_gpd_payment_option_test__quality_sql_7
+    fail query: |    # <--- ATTENZIONE: "fail query", non "query"
+      SELECT * FROM pagopa.silver_gpd_payment_option
+      WHERE op IN ('c', 'u') AND (
+        (after.fee IS NOT NULL AND after.fee < 0) OR
+        (after.amount IS NOT NULL AND after.amount <= 0)
+      )
