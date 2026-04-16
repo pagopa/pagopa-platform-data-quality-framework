@@ -1,0 +1,43 @@
+# Build system — using setuptools; produces a .whl artifact deployable on CDE
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "dq-framework"
+version = "0.1.0"
+description = "Data Quality Framework for PagoPa CDP — Soda + Spark on CDE"
+requires-python = ">=3.10"
+# TODO: pin all versions to match the exact CDE cluster environment
+dependencies = [
+    "pyspark",           # must match the Spark version on the CDE cluster
+    "soda-core-spark",   # Soda Core data quality library with Spark backend
+    "datacontract-cli",  # ODCS contract parsing + SodaCL export
+    "pyyaml",            # YAML parsing for data contracts and config
+]
+
+[project.optional-dependencies]
+# Dev dependencies: not bundled in the wheel, used only locally and in CI
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff",              # linter + formatter
+]
+
+# Console scripts: these become the spark-submit entrypoints on CDE
+[project.scripts]
+run-quality       = "dq_framework.entrypoints.run_quality:main"
+run-observability = "dq_framework.entrypoints.run_observability:main"
+
+# Tell setuptools where the package source lives (root-level package folder)
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dq_framework*"]
+
+# Pytest configuration
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+# Ruff linter/formatter configuration
+[tool.ruff]
+line-length = 120

@@ -1,0 +1,18 @@
+# Python CI — runs on every PR and push to main
+# Steps: lint → unit tests → integration tests (Docker) → build wheel
+#
+# TODO: implement workflow steps once devcontainer image and pyproject.toml are finalised
+
+name: Python CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # TODO: set up Python, install deps, run lint, run tests, build wheel

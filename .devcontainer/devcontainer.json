@@ -1,0 +1,9 @@
+{
+  "name": "dq-framework",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  // TODO: add VS Code extensions, settings, postCreateCommand, mounts as needed
+  "remoteUser": "root"
+}

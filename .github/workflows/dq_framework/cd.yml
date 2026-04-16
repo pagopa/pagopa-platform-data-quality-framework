@@ -1,0 +1,18 @@
+# Python CD — triggered on merge to main (or release tag)
+# Steps: build wheel → upload to CDE as a job resource via CDE API/CLI
+#
+# TODO: implement workflow steps once CDE deployment credentials and process are defined
+
+name: Python CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  cd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # TODO: build wheel, authenticate to CDE, upload artifact, update job definition

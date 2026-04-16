@@ -1,0 +1,7 @@
+dataContractSpecification: 0.9.3
+
+id: urn:datacontract:sample:silver_payments
+info:
+  title: Sample Payments Contract
+  version: 1.0.0
+  description: Minimal ODCS contract used for unit and integration testing.
