@@ -2,6 +2,7 @@ name: CD — Deploy su CDE
 
 on:
   push:
+    branches-ignore: [main]
   workflow_dispatch:
     inputs:
       confirm:
@@ -11,17 +12,12 @@ on:
 
 jobs:
   deploy:
-    if: github.event_name == 'workflow_dispatch'
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.confirm == 'yes')
     runs-on: ubuntu-latest
 
     steps:
-      - name: Verifica conferma
-        run: |
-          if [ "${{ inputs.confirm }}" != "yes" ]; then
-            echo "Conferma non valida. Scrivi 'yes' nel campo confirm per procedere."
-            exit 1
-          fi
-
       - uses: actions/checkout@v4
 
       - name: Calcola suffisso ambiente
