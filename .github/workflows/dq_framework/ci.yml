@@ -1,18 +1,33 @@
-# Python CI — runs on every PR and push to main
-# Steps: lint → unit tests → integration tests (Docker) → build wheel
-#
-# TODO: implement workflow steps once devcontainer image and pyproject.toml are finalised
-
-name: Python CI
+name: CI — Build & Lint
 
 on:
-  pull_request:
   push:
+  pull_request:
     branches: [main]
 
 jobs:
-  ci:
+  build:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
-      # TODO: set up Python, install deps, run lint, run tests, build wheel
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Installa dipendenze di build
+        run: pip install build ruff
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Build wheel
+        run: python -m build --wheel
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dq-framework-whl
+          path: dist/*.whl
+          retention-days: 7

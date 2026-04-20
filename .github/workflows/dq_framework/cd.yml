@@ -1,18 +1,96 @@
-# Python CD — triggered on merge to main (or release tag)
-# Steps: build wheel → upload to CDE as a job resource via CDE API/CLI
-#
-# TODO: implement workflow steps once CDE deployment credentials and process are defined
-
-name: Python CD
+name: CD — Deploy su CDE
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Scrivi "yes" per confermare il deploy'
+        required: true
+        default: ''
 
 jobs:
-  cd:
+  deploy:
     runs-on: ubuntu-latest
+
     steps:
+      - name: Verifica conferma
+        run: |
+          if [ "${{ inputs.confirm }}" != "yes" ]; then
+            echo "Conferma non valida. Scrivi 'yes' nel campo confirm per procedere."
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
-      # TODO: build wheel, authenticate to CDE, upload artifact, update job definition
+
+      - name: Calcola suffisso ambiente
+        id: suffix
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "value=" >> $GITHUB_OUTPUT
+          else
+            echo "value=-test" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build wheel
+        run: |
+          pip install build
+          python -m build --wheel
+
+      - name: Installa CDE CLI
+        run: |
+          curl -L -o cde "${{ vars.CDE_CLI_DOWNLOAD_URL }}"
+          chmod +x cde
+          sudo mv cde /usr/local/bin/cde
+
+      - name: Configura CDE CLI
+        run: |
+          mkdir -p ~/.cde
+          cat > ~/.cde/config.yaml <<EOF
+          vcluster-endpoint: "${{ secrets.CDE_CLUSTER_URL }}"
+          cdp-access-key-id: "${{ secrets.CDP_ACCESS_KEY_ID }}"
+          cdp-private-key: "${{ secrets.CDP_PRIVATE_KEY }}"
+          EOF
+
+      - name: Crea risorsa CDE (se non esiste)
+        run: |
+          RESOURCE_NAME="dq-framework${{ steps.suffix.outputs.value }}"
+          cde resource describe --name "$RESOURCE_NAME" 2>/dev/null \
+            || cde resource create --name "$RESOURCE_NAME" --type files
+
+      - name: Upload wheel su CDE
+        run: |
+          RESOURCE_NAME="dq-framework${{ steps.suffix.outputs.value }}"
+          cde resource upload \
+            --name "$RESOURCE_NAME" \
+            --local-path "$(ls dist/*.whl)"
+
+      - name: Crea o aggiorna job CDE
+        run: |
+          RESOURCE_NAME="dq-framework${{ steps.suffix.outputs.value }}"
+          JOB_NAME="dq-quality${{ steps.suffix.outputs.value }}"
+          WHL_NAME="$(basename dist/*.whl)"
+
+          if cde job describe --name "$JOB_NAME" 2>/dev/null; then
+            cde job update \
+              --name "$JOB_NAME" \
+              --application-file "$WHL_NAME" \
+              --mount-1-resource "$RESOURCE_NAME"
+          else
+            cde job create \
+              --name "$JOB_NAME" \
+              --type spark \
+              --application-file "$WHL_NAME" \
+              --mount-1-resource "$RESOURCE_NAME"
+          fi
+
+      - name: Riepilogo deploy
+        run: |
+          SUFFIX="${{ steps.suffix.outputs.value }}"
+          echo "Branch  : ${{ github.ref_name }}"
+          echo "Risorsa : dq-framework${SUFFIX}"
+          echo "Job     : dq-quality${SUFFIX}"
+          echo "Wheel   : $(basename dist/*.whl)"
