@@ -1,6 +1,7 @@
 name: CD — Deploy su CDE
 
 on:
+  push:
   workflow_dispatch:
     inputs:
       confirm:
@@ -10,6 +11,7 @@ on:
 
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
