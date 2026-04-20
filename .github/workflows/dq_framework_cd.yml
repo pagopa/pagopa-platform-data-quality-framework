@@ -38,11 +38,17 @@ jobs:
           pip install build
           python -m build --wheel
 
-      - name: Installa CDE CLI
+      - name: Installa CDE CLI (se non disponibile)
         run: |
-          curl -L -o cde "${{ vars.CDE_CLI_DOWNLOAD_URL }}"
-          chmod +x cde
-          sudo mv cde /usr/local/bin/cde
+          if command -v cde &>/dev/null; then
+            echo "CDE CLI già presente: $(cde --version)"
+          else
+            echo "CDE CLI non trovato, scarico da ${{ vars.CDE_CLI_DOWNLOAD_URL }}"
+            curl -L --max-time 30 -o cde "${{ vars.CDE_CLI_DOWNLOAD_URL }}"
+            chmod +x cde
+            sudo mv cde /usr/local/bin/cde
+            echo "CDE CLI installato: $(cde --version)"
+          fi
 
       - name: Configura CDE CLI
         run: |
