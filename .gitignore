@@ -40,6 +40,11 @@ hs_err_pid*
 **/.terraform/
 
 
+# --- Build artifacts ---
+dist/
+build/
+*.egg-info/
+
 # --- File temporanei di PySpark ---
 derby.log
 metastore_db/

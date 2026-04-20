@@ -1,7 +1,7 @@
 # Build system — using setuptools; produces a .whl artifact deployable on CDE
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "dq-framework"
