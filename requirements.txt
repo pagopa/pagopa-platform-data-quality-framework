@@ -1,6 +1,9 @@
 # --- Strumenti di sviluppo ---
 flake8
 
+# --- HTTP client (download Data Contract da GitHub) ---
+requests
+
 # --- Motore Dati e Configurazione ---
 # Motore di elaborazione dati per gestire i DataFrame mock
 pyspark==3.5.8

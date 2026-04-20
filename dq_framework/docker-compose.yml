@@ -1,9 +1,11 @@
 version: '3.8'
 services:
   app:
-    build: .
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
     volumes:
-      - .:/workspace:cached
+      - ..:/app:cached
     env_file:
-      - .env
+      - ../.env
     network_mode: host

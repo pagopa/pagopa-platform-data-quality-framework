@@ -1,15 +1,13 @@
 include .env
 export
 
-# Makefile per l'ambiente Dev Container
-.PHONY: run-soda all
-
+.PHONY: lint run-dev run-local-github run-prod
 
 lint:
 	flake8 .
 
-run-soda-direct:
-	python ./dq_framework/tests/mock_data_setup.py && IGNORE_DATACONTRACT_CLI=true python ./dq_framework/src/data_quality.py "./dq_framework/tests/fixtures/contracts/dc payment-option v4.yaml"
+run-dev:
+	python ./dq_framework/tests/mock_data_setup.py && ENV=dev python -m dq_framework.src.entrypoints.run_quality
 
-run-soda:
-	python ./dq_framework/tests/mock_data_setup.py && python ./dq_framework/src/data_quality.py "./dq_framework/tests/fixtures/contracts/dc payment-option v4.yaml"
+run-dev-github:
+	python ./dq_framework/tests/mock_data_setup.py && ENV=local-github python -m dq_framework.src.entrypoints.run_quality

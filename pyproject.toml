@@ -14,6 +14,7 @@ dependencies = [
     "soda-core-spark",   # Soda Core data quality library with Spark backend
     "datacontract-cli",  # ODCS contract parsing + SodaCL export
     "pyyaml",            # YAML parsing for data contracts and config
+    "requests",          # HTTP client for downloading contracts from GitHub
 ]
 
 [project.optional-dependencies]
@@ -26,8 +27,8 @@ dev = [
 
 # Console scripts: these become the spark-submit entrypoints on CDE
 [project.scripts]
-run-quality       = "dq_framework.entrypoints.run_quality:main"
-run-observability = "dq_framework.entrypoints.run_observability:main"
+run-quality       = "dq_framework.src.entrypoints.run_quality:main"
+run-observability = "dq_framework.src.entrypoints.run_observability:main"
 
 # Tell setuptools where the package source lives (root-level package folder)
 [tool.setuptools.packages.find]

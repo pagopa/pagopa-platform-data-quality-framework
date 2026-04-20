@@ -1,1 +1,2 @@
-# TODO: centralised configuration management (table paths, database names, Soda Cloud credentials, env-specific params)
+# Questo file è sostituito dal package dq_framework/src/common/config/
+# Usa: from dq_framework.src.common.config import load_config, AppConfig

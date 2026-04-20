@@ -1,28 +1,25 @@
 FROM python:3.11-slim
 
-# installazione di Java, serve per PySpark
+# installazione di Java (richiesto da PySpark) e make
 RUN apt-get update && \
-    apt-get install -y default-jre procps && \
+    apt-get install -y default-jre procps make && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 ENV JAVA_HOME=/usr/lib/jvm/default-java
 ENV SPARK_LOCAL_IP="127.0.0.1"
 
-# setup cartella di lavoro
 WORKDIR /app
 
-# copia dei requirements e installazione
-COPY requirements.txt .
+# layer dipendenze separato per sfruttare la cache Docker
+COPY requirements.txt pyproject.toml ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# copia di tutti i file
+# copia del sorgente e installazione in modalità editable
+# (rende il pacchetto importabile come `dq_framework.src.*`)
 COPY . /app/
+RUN pip install --no-cache-dir -e .
 
-# variabili d'ambiente
-ENV CONTRACTS_PATH="/app/datacontract"
+ENV CONTRACTS_PATH="/app/dq_framework/tests/fixtures/contracts"
 ENV TABLE_LIMIT="50"
 ENV DATA_SOURCE="RaptoreLake"
-
-# avvia python
-CMD python mock_data_setup.py && python data_quality.py
