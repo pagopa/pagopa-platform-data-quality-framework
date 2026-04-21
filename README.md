@@ -1,139 +1,110 @@
-# Template for Java Spring Microservice project
+# pagopa-platform-data-quality-framework
 
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=TODO-set-your-id&metric=alert_status)](https://sonarcloud.io/dashboard?id=TODO-set-your-id)
-[![Integration Tests](https://github.com/pagopa/<TODO-repo>/actions/workflows/ci_integration_test.yml/badge.svg?branch=main)](https://github.com/pagopa/<TODO-repo>/actions/workflows/ci_integration_test.yml)
+Framework per la **Data Quality** della piattaforma PagoPa CDP.
 
-TODO: add a description
-
-TODO: generate a index with this tool: https://ecotrust-canada.github.io/markdown-toc/
-
-TODO: resolve all the TODOs in this template
+Il progetto interagisce automaticamente con i **Data Contract** — file YAML che descrivono schema, semantica e regole di qualità attese per ogni tabella — 
+Il framework estrae da essi i controlli di qualità, li converte in SodaCL e li esegue contro i dati reali, producendo risultati strutturati e integrandosi opzionalmente con la dashboard **Soda Cloud** per il monitoraggio storico e, eventualmente, scrivendo e rielaborando tali risultati su tabelle del Data Lake.
 
 ---
 
-## Api Documentation 📖
+## Moduli
 
-See the [OpenApi 3 here.](https://editor.swagger.io/?url=https://raw.githubusercontent.com/pagopa/<TODO-repo>/main/openapi/openapi.json)
+Il framework espone due entrypoint distinti, pensati per essere invocati in maniera indipendente (es. da un Airflow DAG su CDE):
 
----
+### `run_quality` — Data Quality Pipeline
 
-## Technology Stack
+Riceve il percorso di un Data Contract (file locale o URL GitHub), lo converte in SodaCL tramite `datacontract-cli` ed esegue la scansione Soda sul DataFrame Spark corrispondente. I risultati vengono scritti come DataFrame strutturato e, se le credenziali Soda Cloud sono configurate, inviati alla dashboard per il monitoraggio nel tempo.
 
-- Java 17
-- Spring Boot 3
-- Spring Web
-- Hibernate
-- JPA
-- ...
-- TODO
+```
+spark-submit dq_framework.whl --entrypoint run_quality \
+  --contract-path /path/to/contracts/silver_table.yaml
+```
 
----
+### `run_observability` — KPI & Metriche *(in sviluppo)*
 
-## Start Project Locally 🚀
-
-### Prerequisites
-
-- docker
-
-### Run docker container
-
-from `./docker` directory
-
-`sh ./run_docker.sh local`
-
-ℹ️ Note: for PagoPa ACR is required the login `az acr login -n <acr-name>`
+Calcola e scrive KPI aggregati sul layer Silver, separati logicamente dai controlli di qualità puntuale. Pensato per alimentare cruscotti di osservabilità operativa.
 
 ---
 
-## Develop Locally 💻
+## Struttura del repository
 
-### Prerequisites
-
-- git
-- maven
-- jdk-17
-
-### Run the project
-
-Start the springboot application with this command:
-
-`mvn spring-boot:run -Dspring.profiles.active=local`
-
-### Spring Profiles
-
-- **local**: to develop locally.
-- _default (no profile set)_: The application gets the properties from the environment (for Azure).
-
-### Testing 🧪
-
-#### Unit testing
-
-To run the **Junit** tests:
-
-`mvn clean verify`
-
-#### Integration testing
-
-From `./integration-test/src`
-
-1. `yarn install`
-2. `yarn test`
-
-#### Performance testing
-
-install [k6](https://k6.io/) and then from `./performance-test/src`
-
-1. `k6 run --env VARS=local.environment.json --env TEST_TYPE=./test-types/load.json main_scenario.js`
+```
+pagopa-platform-data-quality-framework/
+├── .devcontainer/          # Dev Container (Dockerfile + devcontainer.json)
+├── .github/                # Pipeline CI/CD e template PR
+├── dq_framework/
+│   ├── src/
+│   │   ├── common/         # Configurazione per ambiente, logging, utility Spark
+│   │   ├── entrypoints/    # Entry point spark-submit: run_quality, run_observability
+│   │   ├── quality/        # Engine quality: parsing contratti, esecuzione Soda, scrittura risultati
+│   │   └── observability/  # Calcolo e scrittura KPI
+│   └── tests/
+│       ├── fixtures/
+│       │   ├── contracts/  # Data Contract YAML di esempio
+│       │   └── data/       # CSV mock per i test
+│       ├── integration/
+│       └── unit/
+├── .env                    # Credenziali locali (ignorato da Git)
+├── Makefile                # Task di sviluppo
+└── pyproject.toml          # Metadati pacchetto e dipendenze
+```
 
 ---
 
-## Contributors 👥
+## Sviluppo locale
+
+### Come funziona l'ambiente
+
+Lo sviluppo locale avviene all'interno di un **Dev Container**, che garantisce un ambiente riproducibile con Python 3.11, Java (richiesto da PySpark) e tutte le dipendenze già installate. Le operazioni quotidiane sono automatizzate tramite **Makefile**.
+
+Prima di eseguire i controlli di qualità, è necessario avere dei dati: lo script `mock_data_setup.py` inizializza una Spark Session locale, legge i Data Contract per ricavarne lo schema atteso e genera programmaticamente dati sintetici conformi a quello schema.
+
+### Prerequisiti
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- [VS Code](https://code.visualstudio.com/) con l'estensione [Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+
+### 1. Configurazione delle credenziali
+
+Crea il file `.env` nella root del progetto (è già incluso in `.gitignore`):
+
+```env
+GITHUB_TOKEN=<personal access token per scaricare i contratti da GitHub>
+SODA_HOST=cloud.soda.io
+SODA_API_KEY=<API key Soda Cloud>
+SODA_API_SECRET=<API secret Soda Cloud>
+```
+
+> Le credenziali Soda Cloud sono opzionali: senza di esse i controlli vengono comunque eseguiti e i risultati loggati localmente, ma non inviati alla dashboard cloud.
+
+### 2. Apertura del Dev Container
+
+1. Apri la cartella del progetto in VS Code.
+2. Clicca sull'icona `><` in basso a sinistra oppure premi `F1` → **Dev Containers: Reopen in Container**.
+3. Attendi il completamento della build. Quando il terminale mostra il prompt `root@...`, l'ambiente è pronto.
+
+Il container installa automaticamente le dipendenze da `requirements.txt` e il pacchetto in modalità editabile (`pip install -e .`): ogni modifica al codice sorgente è immediatamente attiva senza rebuild.
+
+### 3. Utilizzo del Makefile
+
+Una volta dentro il container, tutte le operazioni di sviluppo sono disponibili tramite `make`. Per vedere i target disponibili, apri direttamente il `Makefile` oppure esegui:
+
+```bash
+cat Makefile
+```
+
+I target coprono tipicamente:
+
+- **Linting** — verifica statica del codice
+- **Esecuzione locale** — genera i dati mock ed esegue la pipeline quality in ambiente `dev`
+- **Esecuzione con integrazione GitHub** — come sopra, ma con configurazione `dev-github` per testare il download dei contratti via API GitHub
+
+> Il `Makefile` è la fonte di verità per i comandi disponibili: aprirlo direttamente è il modo più affidabile per scoprire i target aggiornati.
+
+---
+
+## Maintainer
 
 Made with ❤️ by PagoPa S.p.A.
 
-### Maintainers
-
-See `CODEOWNERS` file
-
-
-
-# 📊 GPD Data Quality Local
-
-Questo progetto fornisce un ambiente standardizzato per l'esecuzione di controlli di qualità dei dati utilizzando **Soda Core** e **Apache Spark (PySpark)**. È progettato per essere eseguito localmente tramite **Dev Containers**.
-
-### 1. Generazione Dati (`mock_data_setup.py`)
-Prima di testare la qualità, il sistema deve avere dei dati. Questo script:
-* Inizializza una **Spark Session** locale.
-* Legge i **Data Contracts** (file YAML) per capire lo schema atteso (nomi delle colonne, tipi di dati).
-* Genera programmaticamente dati sintetici ("Mock Data") che rispettano quegli schemi.
-
-### 2. Controllo Qualità e Reporting (`data_quality.py`)
-* Si connette ai dati generati tramite Spark.
-* Esegue una **Soda Scan** basata sui file di configurazione e sui contratti.
-* **Controlli eseguiti:** Verifica l'assenza di valori nulli, l'univocità delle chiavi primarie, la correttezza dei formati e la conformità degli schemi.
-* **Integrazione Cloud:** Se configurato con le API Key nel file `.env`, invia i risultati direttamente alla dashboard di **Soda Cloud**, permettendo il monitoraggio storico dei test.
-
----
-
-## 🚀 Guida all'avvio rapido
-
-### 1. Prerequisiti
-* **Docker Desktop**
-* **VS Code** con estensione **Dev Containers** installata.
-
-### 2. Setup delle credenziali
-Crea un file `.env` nella cartella root (verrà ignorato da Git):
-env
-SODA_HOST=cloud.soda.io
-SODA_API_KEY=le_tue_chiavi_soda
-SODA_API_SECRET=il_tuo_secret_soda
-
-
-### 3. Apertura dell'Ambiente (Dev Container)
-* Apri la cartella del progetto con VS Code.
-* Clicca sul tasto verde in basso a sinistra (><) oppure premi F1 e digita: Dev Containers: Reopen in Container.
-* Attendi il completamento della build. Quando vedrai il terminale con root@..., l'ambiente sarà pronto.
-
-### 4. Utilizzo del Makefile
-Una volta dentro il container, Esegui Pipeline Completa (Mock + Quality):
-* make run-soda
+See [`CODEOWNERS`](CODEOWNERS) for the list of maintainers.
