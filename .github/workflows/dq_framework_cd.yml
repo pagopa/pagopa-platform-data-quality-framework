@@ -52,43 +52,59 @@ jobs:
 
       - name: Configura CDE CLI
         run: |
-          mkdir -p ~/.cde
-          cat > ~/.cde/config.yaml <<EOF
-          vcluster-endpoint: "${{ secrets.CDE_CLUSTER_URL }}"
-          cdp-access-key-id: "${{ secrets.CDP_ACCESS_KEY_ID }}"
-          cdp-private-key: "${{ secrets.CDP_PRIVATE_KEY }}"
+          mkdir -p ~/.cdp
+          cat > ~/.cdp/credentials <<EOF
+          [default]
+          cdp_access_key_id = ${{ secrets.CDP_ACCESS_KEY_ID }}
+          cdp_private_key = ${{ secrets.CDP_PRIVATE_KEY }}
           EOF
 
       - name: Crea risorsa CDE (se non esiste)
         run: |
           RESOURCE_NAME="dq-framework${{ steps.suffix.outputs.value }}"
-          cde resource describe --name "$RESOURCE_NAME" 2>/dev/null \
-            || cde resource create --name "$RESOURCE_NAME" --type files
+          cde resource describe --name "$RESOURCE_NAME" \
+            --vcluster-endpoint "${{ secrets.CDE_CLUSTER_URL }}" 2>/dev/null \
+            || cde resource create --name "$RESOURCE_NAME" --type files \
+              --vcluster-endpoint "${{ secrets.CDE_CLUSTER_URL }}"
 
-      - name: Upload wheel su CDE
+      - name: Upload wheel e launcher su CDE
         run: |
           RESOURCE_NAME="dq-framework${{ steps.suffix.outputs.value }}"
           cde resource upload \
             --name "$RESOURCE_NAME" \
-            --local-path "$(ls dist/*.whl)"
+            --local-path "$(ls dist/*.whl)" \
+            --vcluster-endpoint "${{ secrets.CDE_CLUSTER_URL }}"
+          cde resource upload \
+            --name "$RESOURCE_NAME" \
+            --local-path launcher.py \
+            --vcluster-endpoint "${{ secrets.CDE_CLUSTER_URL }}"
 
       - name: Crea o aggiorna job CDE
         run: |
           RESOURCE_NAME="dq-framework${{ steps.suffix.outputs.value }}"
           JOB_NAME="dq-quality${{ steps.suffix.outputs.value }}"
           WHL_NAME="$(basename dist/*.whl)"
+          ENDPOINT="${{ secrets.CDE_CLUSTER_URL }}"
 
-          if cde job describe --name "$JOB_NAME" 2>/dev/null; then
+          if cde job describe --name "$JOB_NAME" --vcluster-endpoint "$ENDPOINT" 2>/dev/null; then
             cde job update \
               --name "$JOB_NAME" \
-              --application-file "$WHL_NAME" \
-              --mount-1-resource "$RESOURCE_NAME"
+              --application-file launcher.py \
+              --spark-flag "--py-files=$WHL_NAME" \
+              --mount-1-resource "$RESOURCE_NAME" \
+              --vcluster-endpoint "$ENDPOINT"
           else
             cde job create \
               --name "$JOB_NAME" \
               --type spark \
-              --application-file "$WHL_NAME" \
-              --mount-1-resource "$RESOURCE_NAME"
+              --application-file launcher.py \
+              --spark-flag "--py-files=$WHL_NAME" \
+              --mount-1-resource "$RESOURCE_NAME" \
+              --env ENV=prod \
+              --env GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" \
+              --env SODA_API_KEY="${{ secrets.SODA_API_KEY }}" \
+              --env SODA_API_SECRET="${{ secrets.SODA_API_SECRET }}" \
+              --vcluster-endpoint "$ENDPOINT"
           fi
 
       - name: Riepilogo deploy

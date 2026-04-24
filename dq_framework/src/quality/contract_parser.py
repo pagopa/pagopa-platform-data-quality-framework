@@ -17,11 +17,10 @@ except ImportError:
     sys.exit(1)
 
 from dq_framework.src.common.config import AppConfig
+from dq_framework.src.common import secrets
 
 logger = logging.getLogger(__name__)
 
-
-_GITHUB_BLOB_RE = re.compile(r"https://github\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+)")
 
 _GITHUB_API_HEADERS = {
     "Accept": "application/vnd.github+json",
@@ -29,29 +28,23 @@ _GITHUB_API_HEADERS = {
 }
 
 
-def _parse_github_url(url: str) -> tuple[str, str, str, str] | None:
-    """Estrae (owner, repo, ref, filepath) da una URL github.com/blob/."""
-    match = _GITHUB_BLOB_RE.match(url)
-    if match:
-        return match.groups()  # (owner, repo, ref, filepath)
-    return None
-
-
-def _resolve_contract_path(path: str, config: AppConfig) -> str:
-    """Restituisce un path locale: scarica il file via GitHub API se è una URL GitHub, altrimenti lo usa direttamente."""
-    if not path.startswith("https://"):
-        return path
-
-    parts = _parse_github_url(path)
-    if parts is None:
+def _fetch_from_github(
+    repository: str,
+    ref: str,
+    filepath: str,
+    config: AppConfig,
+) -> str:
+    """Scarica un file dal repo GitHub via Contents API e lo salva in un file temp. Ritorna il path temp."""
+    try:
+        owner, repo = repository.split("/", 1)
+    except ValueError as exc:
         raise RuntimeError(
-            f"URL GitHub non riconosciuta (formato atteso: github.com/{{owner}}/{{repo}}/blob/{{ref}}/{{path}}): {path}"
-        )
+            f"Repository '{repository}' non valido: atteso formato 'owner/repo'."
+        ) from exc
 
-    owner, repo, ref, filepath = parts
     api_url = f"{config.github_api_base_url}/repos/{owner}/{repo}/contents/{filepath}"
 
-    token = os.getenv("GITHUB_TOKEN")
+    token = secrets.github_token()
     headers = dict(_GITHUB_API_HEADERS)
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -85,6 +78,22 @@ def _resolve_contract_path(path: str, config: AppConfig) -> str:
     return tmp.name
 
 
+def _resolve_contract_path(
+    contract_path: str,
+    repository: str,
+    ref: str,
+    config: AppConfig,
+) -> str:
+    """Restituisce un path locale leggibile.
+
+    - Se `repository` è vuoto → `contract_path` è un path locale: viene restituito così com'è.
+    - Altrimenti → `contract_path` è repo-relativo e viene scaricato via GitHub API.
+    """
+    if not repository:
+        return contract_path
+    return _fetch_from_github(repository, ref, contract_path, config)
+
+
 def _generate_sodacl(filepath: str) -> str | None:
     """Converte un Data Contract YAML in stringa SodaCL tramite l'API Python nativa."""
     logger.info(f"Avvio conversione DataContract -> SodaCL per: {filepath}")
@@ -109,13 +118,22 @@ def _normalize_sodacl(sodacl: str, dataset: str, table_name: str) -> str:
     return normalized.replace(dataset, table_name)
 
 
-def parse_contract_file(path: str, config: AppConfig) -> dict | None:
+def parse_contract_file(
+    contract_path: str,
+    repository: str,
+    ref: str,
+    config: AppConfig,
+) -> dict | None:
     """Legge metadati essenziali dallo YAML e genera la stringa SodaCL corrispondente.
 
-    Accetta sia un path locale che una URL github.com/blob/ (scaricata via GitHub API).
+    Args:
+        contract_path: path repo-relativo (se `repository` è valorizzato) o path locale.
+        repository:    "owner/repo" — stringa vuota per trattare contract_path come locale.
+        ref:           branch/tag/commit (ignorato se repository è vuoto).
+        config:        AppConfig dell'ambiente corrente.
     """
     try:
-        filepath = _resolve_contract_path(path, config)
+        filepath = _resolve_contract_path(contract_path, repository, ref, config)
     except RuntimeError as e:
         logger.error(str(e))
         return None

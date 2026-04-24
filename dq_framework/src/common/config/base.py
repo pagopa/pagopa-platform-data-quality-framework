@@ -9,7 +9,9 @@ class AppConfig:
 
     # GitHub
     github_api_base_url: str
-    contract_path: str          # path locale o URL github.com/blob/…
+    contract_path: str           # default: path repo-relativo (dev-github/prod) o path locale (dev)
+    default_repository: str      # "owner/repo" — vuoto se contract_path è locale
+    default_ref: str             # branch/tag/commit di default
 
     # Soda
     soda_host: str
@@ -18,4 +20,4 @@ class AppConfig:
 
     # Comportamento DataContract CLI
     ignore_datacontract_cli: bool
-    soda_fallback_path: str     # usato solo quando ignore_datacontract_cli=True
+    soda_fallback_path: str      # usato solo quando ignore_datacontract_cli=True

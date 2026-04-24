@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import logging
-import os
 
 from pyspark.sql import SparkSession
 from soda.scan import Scan
 
 from dq_framework.src.common.config import AppConfig
+from dq_framework.src.common import secrets
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +29,8 @@ def run_soda_scan(spark: SparkSession, contract: dict, config: AppConfig) -> lis
     scan.add_spark_session(spark, data_source_name=config.data_source)
     scan.add_sodacl_yaml_str(contract["sodacl"])
 
-    soda_api_key    = os.getenv("SODA_API_KEY")
-    soda_api_secret = os.getenv("SODA_API_SECRET")
+    soda_api_key    = secrets.soda_api_key()
+    soda_api_secret = secrets.soda_api_secret()
 
     if soda_api_key and soda_api_secret:
         logger.info("Credenziali Soda Cloud rilevate: invio risultati in corso...")

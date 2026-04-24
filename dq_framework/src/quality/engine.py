@@ -56,10 +56,16 @@ def _log_results_summary(df_results) -> None:
     logger.info("=" * 80)
 
 
-def run_pipeline(contract_file_path: str, config: AppConfig) -> None:
-    logger.info(f"Avvio pipeline Data Quality GPD per il file: {contract_file_path}")
+def run_pipeline(
+    contract_path: str,
+    repository: str,
+    ref: str,
+    config: AppConfig,
+) -> None:
+    source_desc = f"{repository}@{ref}:{contract_path}" if repository else contract_path
+    logger.info(f"Avvio pipeline Data Quality GPD per: {source_desc}")
 
-    contract = parse_contract_file(contract_file_path, config)
+    contract = parse_contract_file(contract_path, repository, ref, config)
     if not contract:
         logger.error("Contract non valido o non trovato. Pipeline terminata.")
         return
