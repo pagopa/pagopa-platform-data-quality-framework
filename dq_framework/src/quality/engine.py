@@ -8,7 +8,8 @@ from pyspark.sql import SparkSession
 from dq_framework.src.common.config import AppConfig
 from .contract_parser import parse_contract_file
 from .result_writer import RESULTS_SCHEMA, process_scan_results
-from .soda_executor import run_soda_scan
+from .soda_executor import run_dataframe_soda_scan
+from .impala_executor import run_impala_soda_scan
 
 logger = logging.getLogger(__name__)
 
@@ -76,10 +77,21 @@ def run_pipeline(
     logger.info("+" * 80)
     logger.info(f"Elaborazione Contract: {contract['contract_title']} ({contract['contract_path']})")
 
-    checks = run_soda_scan(spark, contract, config)
-    if checks:
+    logger.info(f"Esecuzione run_dataframe_soda_scan tramite Soda / PySpark")
+    # 1. Esecuzione tramite Soda / PySpark
+    soda_checks = run_dataframe_soda_scan(spark, contract, config)
+    
+    logger.info(f"Esecuzione run_impala_soda_scan su Impala")
+    # 2. Esecuzione diretta su Impala tramite le query in "quality:"
+    impala_checks = run_impala_soda_scan(spark, contract, config)
+    
+    # 3. Unione dei risultati
+    all_combined_checks = soda_checks + impala_checks
+
+    if all_combined_checks:
+        # Usa la lista combinata per scrivere i risultati
         rows = process_scan_results(
-            scan_checks      = checks,
+            scan_checks      = all_combined_checks,
             contract_title   = contract["contract_title"],
             contract_version = contract["contract_version"],
             table_name       = contract["table_name"],
@@ -87,9 +99,9 @@ def run_pipeline(
             data_source      = config.data_source,
         )
         all_rows.extend(rows)
-        _log_contract_summary(checks, contract["contract_title"])
+        _log_contract_summary(all_combined_checks, contract["contract_title"])
     else:
-        logger.warning("Nessun check restituito dallo scan.")
+        logger.warning("Nessun check restituito dallo scan o da Impala.")
 
     if all_rows:
         df_results = spark.createDataFrame(all_rows, schema=RESULTS_SCHEMA)

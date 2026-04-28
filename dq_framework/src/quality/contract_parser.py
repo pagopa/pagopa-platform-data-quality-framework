@@ -101,7 +101,6 @@ def _generate_sodacl(filepath: str) -> str | None:
         data_contract = DataContract(data_contract_file=filepath)
         sodacl_string = data_contract.export(export_format="sodacl")
         logger.info("Conversione riuscita con successo!")
-        logger.info(f"\n{'-'*30} CONTROLLI GENERATI (DEBUG) {'-'*30}\n{sodacl_string}\n{'-'*88}")
         return sodacl_string
     except Exception as e:
         logger.error(f"Errore durante la conversione tramite DataContract API: {str(e)}")
@@ -162,6 +161,8 @@ def parse_contract_file(
 
     raw_sodacl: str | None = None
 
+    impala_quality_checks = doc.get("custom_impala_quality", [])
+
     if config.ignore_datacontract_cli:
         logger.info(f"ignore_datacontract_cli=True: lettura diretta da {config.soda_fallback_path}")
         try:
@@ -185,4 +186,5 @@ def parse_contract_file(
         "dataset":          dataset,
         "table_name":       table_name,
         "sodacl":           _normalize_sodacl(raw_sodacl, dataset, table_name),
+        "impala_checks":    impala_quality_checks,
     }
