@@ -1,4 +1,4 @@
-dl_id,op,ts_ms,ts_us,ts_ns,dl_ingestion_tms,dl_event_tms,before,after_id,after_payment_position_id,after_amount,after_description,after_fee,after_inserted_date,after_is_partial_payment,after_iuv,after_organization_fiscal_code,after_status,after_validity_date,after_due_date,after_retention_date,after_last_update_date_notification_fee
-1,u,1731511357267,0,0,0,,,123456,98765,-30000,Pagamento TARI 2024,-150,1731511357267000,false,1234567890123456,RSSMRA80A01H501U,PO_PAID,1731511357267000,1731511357267000,1731511357267000,1731511357267000
-1,u,1731511357267,0,0,0,,,123456,98765,-30000,Pagamento TARI 2024,-150,1731511357267000,false,1234567890123456,RSSMRA80A01H501U,PO_PAID,1731511357267000,1731511357267000,1731511357267000,1731511357267000
-1,u,1731511357267,0,0,0,,,123456,98765,-30000,Pagamento TARI 2024,-150,1731511357267000,false,1234567890123456,RSSMRA80A01H501U,PO_PAID,1731511357267000,1731511357267000,1731511357267000,1731511357267000
+dl_id,op,ts_ms,ts_us,ts_ns,dl_ingestion_tms,dl_event_tms,before,after_id,after_payment_position_id,after_amount,after_description,after_fee,after_inserted_date,after_is_partial_payment,after_iuv,after_organization_fiscal_code,after_status,after_validity_date,after_due_date,after_retention_date,after_last_updated_date_notification_fee
+1,u,1731511357267,0,0,0,,,123456,98765,-50000,Causale non valida con caratteri !@#$,-150,1731511357267000,false,123456ABCD,12345,STATO_INVENTATO,1731511357267000,1731511357267000,1731511357267000,1731511357267000
+2,c,1731511357267,0,0,0,,,,,,,,,,,,,,,
+3,u,1731511357267,0,0,0,,,123456,98765,30000,Causale corretta,150,99999999999999999,false,1234567890123456,12345678901,PO_PAID,99999999999999999,2840140800000000,99999999999999999,99999999999999999

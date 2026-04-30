@@ -12,7 +12,6 @@ requires-python = ">=3.10"
 dependencies = [
     "pyspark",           # must match the Spark version on the CDE cluster
     "soda-core-spark",   # Soda Core data quality library with Spark backend
-    "datacontract-cli",  # ODCS contract parsing + SodaCL export
     "pyyaml",            # YAML parsing for data contracts and config
     "requests",          # HTTP client for downloading contracts from GitHub
 ]

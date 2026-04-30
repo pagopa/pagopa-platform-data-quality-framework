@@ -10,12 +10,6 @@ import tempfile
 import requests
 import yaml
 
-try:
-    from datacontract.data_contract import DataContract
-except ImportError:
-    print("ERRORE CRITICO: Libreria 'datacontract' non trovata. Verificare il Virtual Environment CDE.")
-    sys.exit(1)
-
 from dq_framework.src.common.config import AppConfig
 from dq_framework.src.common import secrets
 
@@ -94,17 +88,7 @@ def _resolve_contract_path(
     return _fetch_from_github(repository, ref, contract_path, config)
 
 
-def _generate_sodacl(filepath: str) -> str | None:
-    """Converte un Data Contract YAML in stringa SodaCL tramite l'API Python nativa."""
-    logger.info(f"Avvio conversione DataContract -> SodaCL per: {filepath}")
-    try:
-        data_contract = DataContract(data_contract_file=filepath)
-        sodacl_string = data_contract.export(export_format="sodacl")
-        logger.info("Conversione riuscita con successo!")
-        return sodacl_string
-    except Exception as e:
-        logger.error(f"Errore durante la conversione tramite DataContract API: {str(e)}")
-        return None
+
 
 
 def _normalize_sodacl(sodacl: str, dataset: str, table_name: str) -> str:
@@ -123,14 +107,7 @@ def parse_contract_file(
     ref: str,
     config: AppConfig,
 ) -> dict | None:
-    """Legge metadati essenziali dallo YAML e genera la stringa SodaCL corrispondente.
-
-    Args:
-        contract_path: path repo-relativo (se `repository` è valorizzato) o path locale.
-        repository:    "owner/repo" — stringa vuota per trattare contract_path come locale.
-        ref:           branch/tag/commit (ignorato se repository è vuoto).
-        config:        AppConfig dell'ambiente corrente.
-    """
+    """Legge il file YAML del Data Contract ed estrae la specifica SodaCL dal blocco 'quality'."""
     try:
         filepath = _resolve_contract_path(contract_path, repository, ref, config)
     except RuntimeError as e:
@@ -138,51 +115,47 @@ def parse_contract_file(
         return None
 
     try:
-        with open(filepath, encoding="utf-8") as fh:
-            doc = yaml.safe_load(fh)
+        # Leggiamo il file come un normale dizionario YAML
+        with open(filepath, "r", encoding="utf-8") as f:
+            doc = yaml.safe_load(f)
+            
+        logger.info(f"Lettura YAML da {filepath} riuscita con successo!")
+        
+        # 1. Estrazione metadati base
+        info = doc.get("info", {})
+        contract_title = info.get("title", os.path.basename(filepath))
+        contract_version = str(info.get("version", "1.0"))
+        
+        # 2. Ricerca del blocco "quality"
+        quality_block = doc.get("quality", {})
+        if not quality_block or quality_block.get("type") != "SodaCL":
+            logger.error(f"File saltato '{filepath}': manca il blocco 'quality' di tipo 'SodaCL'.")
+            return None
+            
+        # 3. Estrazione dataset e stringa SodaCL pura
+        dataset = quality_block.get("dataset", "")
+        raw_sodacl = quality_block.get("specification", "")
+        
+        if not dataset or not raw_sodacl:
+            logger.error(f"File saltato '{filepath}': 'dataset' o 'specification' mancanti nel blocco 'quality'.")
+            return None
+            
+        # Calcoliamo il nome della tabella in base al dataset
+        table_name = dataset.split(".")[-1].replace("-", "_")
+
+        # 4. Recupero eventuali check Impala custom
+        impala_quality_checks = doc.get("custom_impala_quality", [])
+
+        logger.debug(f"\n{'-'*30} CONTROLLI SODA ESTRATTI {'-'*30}\n{raw_sodacl}\n{'-'*88}")
+
     except Exception as e:
-        logger.error(f"Impossibile leggere il file YAML {filepath}: {e}")
-        return None
-
-    if "dataContractSpecification" not in doc or "models" not in doc:
-        logger.error(f"File saltato '{filepath}': manca 'dataContractSpecification' o 'models'.")
-        return None
-
-    models = doc.get("models", {})
-    if not models:
-        logger.error(f"File saltato '{filepath}': il tag 'models' è presente ma vuoto.")
-        return None
-
-    model_name = list(models.keys())[0].strip()
-    dataset = models[model_name].get("dataset", model_name).strip()
-
-    info = doc.get("info", {})
-    table_name = dataset.split(".")[-1].replace("-", "_")
-
-    raw_sodacl: str | None = None
-
-    impala_quality_checks = doc.get("custom_impala_quality", [])
-
-    if config.ignore_datacontract_cli:
-        logger.info(f"ignore_datacontract_cli=True: lettura diretta da {config.soda_fallback_path}")
-        try:
-            with open(config.soda_fallback_path, "r", encoding="utf-8") as f:
-                raw_sodacl = f.read()
-            logger.info("Lettura da soda_fallback_path riuscita con successo!")
-            logger.info(f"\n{'-'*30} CONTROLLI CARICATI (DEBUG) {'-'*30}\n{raw_sodacl}\n{'-'*88}")
-        except Exception as e:
-            logger.error(f"Errore durante la lettura del file {config.soda_fallback_path}: {str(e)}")
-    else:
-        raw_sodacl = _generate_sodacl(filepath)
-
-    if not raw_sodacl:
-        logger.warning(f"File saltato '{filepath}': generazione SodaCL fallita.")
+        logger.error(f"Errore durante l'elaborazione del file {filepath}: {str(e)}")
         return None
 
     return {
         "contract_path":    filepath,
-        "contract_title":   info.get("title", os.path.basename(filepath)),
-        "contract_version": str(info.get("version", "")),
+        "contract_title":   contract_title,
+        "contract_version": contract_version,
         "dataset":          dataset,
         "table_name":       table_name,
         "sodacl":           _normalize_sodacl(raw_sodacl, dataset, table_name),

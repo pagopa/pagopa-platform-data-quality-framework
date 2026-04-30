@@ -83,10 +83,10 @@ def run_pipeline(
     
     logger.info(f"Esecuzione run_impala_soda_scan su Impala")
     # 2. Esecuzione diretta su Impala tramite le query in "quality:"
-    impala_checks = run_impala_soda_scan(spark, contract, config)
+    #impala_checks = run_impala_soda_scan(spark, contract, config)
     
     # 3. Unione dei risultati
-    all_combined_checks = soda_checks + impala_checks
+    all_combined_checks = soda_checks #+ impala_checks
 
     if all_combined_checks:
         # Usa la lista combinata per scrivere i risultati

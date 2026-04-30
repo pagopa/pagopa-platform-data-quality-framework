@@ -41,7 +41,7 @@ def setup_mock_data(csv_path):
         StructField("after_validity_date", LongType(), True),
         StructField("after_due_date", LongType(), True),
         StructField("after_retention_date", LongType(), True),
-        StructField("after_last_update_date_notification_fee", LongType(), True)
+        StructField("after_last_updated_date_notification_fee", LongType(), True)
     ])
 
     logger.info(f"Lettura dei dati dal file {csv_path}...")
@@ -73,7 +73,7 @@ def setup_mock_data(csv_path):
             col("after_validity_date").alias("validity_date"),
             col("after_due_date").alias("due_date"),
             col("after_retention_date").alias("retention_date"),
-            col("after_last_update_date_notification_fee").alias("last_update_date_notification_fee")
+            col("after_last_updated_date_notification_fee").alias("last_updated_date_notification_fee")
         ).alias("after")
     )
     

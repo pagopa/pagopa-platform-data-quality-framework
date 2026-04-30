@@ -9,6 +9,4 @@ PROD_CONFIG = AppConfig(
     soda_host="cloud.soda.io",
     data_source="Raptor Lake",
     table_limit=200,
-    ignore_datacontract_cli=False,
-    soda_fallback_path="",
 )

@@ -9,6 +9,4 @@ DEV_GITHUB_CONFIG = AppConfig(
     soda_host="cloud.soda.io",
     data_source="lg_spark",
     table_limit=50,
-    ignore_datacontract_cli=False,
-    soda_fallback_path="",
 )

@@ -135,7 +135,7 @@ models:
         mustBe: 0
 custom_impala_quality:
   - failed rows: #NON SUPPORTATA DA SODACLI
-      name: silver_gpd_payment_option_test__quality_sql_7
+      name: silver_gpd_payment_option__quality_sql_7
       fail query: |    
         SELECT * FROM pagopa.silver_gpd_payment_option
         WHERE op IN ('c', 'u') AND (
