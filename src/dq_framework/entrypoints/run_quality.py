@@ -22,9 +22,9 @@ from __future__ import annotations
 import argparse
 import sys
 
-from dq_framework.src.common.config import load_config
-from dq_framework.src.common.logging import setup_logging
-from dq_framework.src.quality.engine import run_pipeline
+from dq_framework.common.config import load_config
+from dq_framework.common.logging import setup_logging
+from dq_framework.quality.engine import run_pipeline
 
 
 def _parse_args(

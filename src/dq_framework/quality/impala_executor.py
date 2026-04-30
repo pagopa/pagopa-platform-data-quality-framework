@@ -5,8 +5,8 @@ import logging
 from pyspark.sql import SparkSession
 from soda.scan import Scan
 
-from dq_framework.src.common.config import AppConfig
-from dq_framework.src.common import secrets
+from dq_framework.common.config import AppConfig
+from dq_framework.common import secrets
 import yaml
 
 logger = logging.getLogger(__name__)

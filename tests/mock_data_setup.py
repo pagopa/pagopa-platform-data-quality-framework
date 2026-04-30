@@ -84,4 +84,4 @@ def setup_mock_data(csv_path):
     spark.stop()
 
 if __name__ == "__main__":
-    setup_mock_data("./dq_framework/tests/fixtures/data/mock_silver_gpd_payment_option.csv")
+    setup_mock_data("./tests/fixtures/data/mock_silver_gpd_payment_option.csv")

@@ -26,12 +26,12 @@ dev = [
 
 # Console scripts: these become the spark-submit entrypoints on CDE
 [project.scripts]
-run-quality       = "dq_framework.src.entrypoints.run_quality:main"
-run-observability = "dq_framework.src.entrypoints.run_observability:main"
+run-quality       = "dq_framework.entrypoints.run_quality:main"
+run-observability = "dq_framework.entrypoints.run_observability:main"
 
-# Tell setuptools where the package source lives (root-level package folder)
+# Tell setuptools where the package source lives (src layout)
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 include = ["dq_framework*"]
 
 # Pytest configuration

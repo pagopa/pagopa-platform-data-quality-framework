@@ -5,7 +5,7 @@ from datetime import datetime
 
 from pyspark.sql import SparkSession
 
-from dq_framework.src.common.config import AppConfig
+from dq_framework.common.config import AppConfig
 from .contract_parser import parse_contract_file
 from .result_writer import RESULTS_SCHEMA, process_scan_results
 from .soda_executor import run_dataframe_soda_scan

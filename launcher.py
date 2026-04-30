@@ -1,3 +1,3 @@
-from dq_framework.src.entrypoints.run_quality import main
+from dq_framework.entrypoints.run_quality import main
 
 main()

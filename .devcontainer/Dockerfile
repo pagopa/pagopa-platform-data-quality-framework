@@ -16,10 +16,10 @@ COPY requirements.txt pyproject.toml ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # copia del sorgente e installazione in modalità editable
-# (rende il pacchetto importabile come `dq_framework.src.*`)
+# (rende il pacchetto importabile come `dq_framework.*`)
 COPY . /app/
 RUN pip install --no-cache-dir -e .
 
-ENV CONTRACTS_PATH="/app/dq_framework/tests/fixtures/contracts"
+ENV CONTRACTS_PATH="/app/tests/fixtures/contracts"
 ENV TABLE_LIMIT="50"
 ENV DATA_SOURCE="RaptoreLake"
