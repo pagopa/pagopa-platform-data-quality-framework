@@ -1,0 +1,582 @@
+dataContractSpecification: 0.9.3
+id: urn:pagopa:ecommerce:wallet
+info:
+  title: Wallet Contract
+  version: 0.0.1
+  description: Definire l'oggetto per rappresentare il wallet dell'utente.
+  owner: pagoPA QA-Team
+  contact:
+    name: Andrea Ferracci (Data Owner)
+    url: https://pagopa.atlassian.net/wiki/spaces/I/pages/910000520/Design+Review+-+Wallet
+    email: andrea.ferracci@pagopa.it
+    slack-channel: https://pagopaspa.slack.com/archives/C015HN4UZAM
+### servers
+servers:
+  uat:
+    type: kafka
+    host: sb://pagopa-u-itn-observ-evh.servicebus.windows.net
+    topic: payment-wallet-ingestion-dl
+    format: json
+  production:
+    type: kafka
+    host: sb://pagopa-p-weu-observ-evh.servicebus.windows.net
+    topic: payment-wallet-ingestion-dl
+    format: json
+
+### terms
+terms:
+  usage: >
+    - GLi eventi di update sono relativi esclusivamente alle applicazioni abilitate (es. PAGOPA), infatti gli unici dati che l'utente può
+      modificare sono quelli relativi al'abilitazione/disabilitazione del wallet per una determinata applicazione. 
+    - Quando viene ricevuto un evento WalletApplicationsUpdatedEvent con il campo updatedApplications valorizzato, 
+      verrà effettuato un overwrite su auditWallet.applications con lo stesso walletId.
+  limitations: >
+    - Lo stato del wallet non corrisponde allo stato del metodo di pagamento a cui fa riferimento, ad esempio se una carta di credio giunge
+      a scadenza, il wallet collegato non cambierà automaticamente stato.
+  noticePeriod: P1M
+
+### models
+models:
+  wallet:
+    description: Oggetto che rappresenta l'entità wallet
+    fields:
+      id:
+        title: id
+        pii: false
+        type: string
+        required: true
+        description: Identificativo univoco dell'evento
+        classification: public
+        example: "193e2ec5-ac66-41d5-99c0-415621e92d05" 
+      timestamp:
+        title: timestamp
+        pii: false
+        type: string
+        required: true
+        description: Data ultima modifica dell'evento
+        classification: public
+        example: "2024-10-28T09:20:49.076091947Z" 
+      type:
+        title: type
+        pii: false      
+        type: string
+        required: true
+        enum:
+          - WalletOnboardCompletedEvent
+          - WalletApplicationsUpdatedEvent
+          - WalletDeletedEvent
+          - WalletOnboardReplacedEvent
+        description: tipologia di evento (ripettivamnte Onboarding, update, delete e sostituzione carta scaduta)
+        classification: public
+        example: "WalletOnboardCompletedEvent" 
+      walletId:
+        title: walletId
+        pii: false      
+        type: string
+        required: true
+        description: Identificativo univoco del wallet
+        classification: public
+        example: "5be2080b-69a2-4875-91dc-185891dfe9f5" 
+      auditWallet:
+        title: auditWallet
+        pii: false      
+        type: object
+        required: false
+        description: Dati del wallet, sezione presente soltanto per l'evento di onboarding WalletOnboardCompletedEvent e l'evento di aggiornamento carta scaduta WalletOnboardReplacedEvent
+        classification: public 
+        fields:
+          paymentMethodId:
+            title: paymentMethodId
+            pii: false
+            type: string
+            required: false
+            description: Identificativo univoco del metodo di pagamento (campo presente e obbligatorio soltanto per l'evento di onboarding WalletOnboardCompletedEvent)
+            classification: public
+            example: "0d1450f4-b993-4f89-af5a-1770a45f5d71" 
+          creationDate:
+            title: creationDate
+            pii: false          
+            type: string
+            required: false
+            description: Data di creazione dell'evento (campo presente e obbligatorio soltanto per l'evento di onboarding WalletOnboardCompletedEvent)
+            classification: public
+            example: "2024-10-28T09:19:58.512332825Z" 
+          updateDate:
+            title: updateDate
+            pii: false          
+            type: string
+            required: false
+            description: Data ultima modifica del wallet (campo presente e obbligatorio soltanto per l'evento di onboarding WalletOnboardCompletedEvent)
+            classification: public
+            example: "2024-10-28T09:20:49.050160654Z" 
+          applications:
+            title: applications
+            pii: false          
+            type: array
+            required: false
+            description: Applicazione su cui il wallet è stato abilitato/disabilitato (campo presente e obbligatorio soltanto per l'evento di onboarding WalletOnboardCompletedEvent)
+            classification: public 
+            items:
+              type: object
+              fields:
+                _id:
+                  title: _id
+                  pii: false                          
+                  type: string
+                  required: true
+                  description: Identificativo dell'applicazione, es. PAGOPA
+                  classification: public
+                  example: "PAGOPA" 
+                status:
+                  title: status
+                  pii: false                          
+                  type: string
+                  required: true
+                  enum:
+                    - ENABLED
+                    - DISABLED
+                  description: Stato del wallet per l'applicazione
+                  classification: public
+                  example: "ENABLED" 
+                creationDate:
+                  title: creationDate
+                  pii: false                          
+                  type: string
+                  required: true
+                  description: Data di associazione all'applicazione
+                  classification: public
+                  example: "2024-10-28T09:19:58.395302808Z" 
+                updateDate:
+                  title: updateDate
+                  pii: false                          
+                  type: string
+                  required: true
+                  description: Data ultima modifica dell'associazione
+                  classification: public
+                  example: "2024-10-28T09:19:58.395303146Z" 
+          details:
+            title: details
+            pii: false  
+            type: object
+            required: false
+            description: Dettagli del wallet (campo presente e obbligatorio soltanto per l'evento di onboarding WalletOnboardCompletedEvent)
+            classification: public 
+            fields:
+              type:
+                title: type
+                pii: false  
+                type: string
+                required: true
+                description: Tipologia del metodo di pagamento, es. CARD, PAYPAL ...
+                classification: public
+                example: "PAYPAL" 
+              cardBrand:
+                title: cardBrand
+                pii: false  
+                type: string
+                required: false
+                description: Brand del metodo di pagamento, valido solo per la tipologia CARD
+                classification: public 
+              pspId:
+                title: pspId
+                pii: false  
+                type: string
+                required: false
+                description: Id del PSP con cui è stato eseguito l'onboarding
+                classification: public
+                example: "BCITITMM" 
+          status:
+            title: status
+            pii: false 
+            type: string
+            required: false
+            description: Stato del wallet, es. VALIDATED (campo presente e obbligatorio soltanto per l'evento di onboarding WalletOnboardCompletedEvent)
+            classification: public
+            example: "VALIDATED" 
+          validationOperationId:
+            title: validationOperationId
+            pii: false 
+            type: string
+            required: false
+            description: Identificativo dell'operazione NPG con cui è stato eseguito l'onboarding
+            classification: public
+            example: "572632648066943029" 
+          validationOperationResult:
+            title: validationOperationResult
+            pii: false 
+            type: string
+            required: false
+            description: Risultato della validazione lato NPG
+            classification: public
+            example: "EXECUTED" 
+          validationOperationTimestamp:
+            title: validationOperationTimestamp
+            pii: false 
+            type: string
+            required: false
+            description: Timestamp della validazione lato NPG
+            classification: public
+            example: "2024-10-28T09:20:48.610Z"
+          validationErrorCode:
+            title: validationErrorCode
+            pii: false 
+            type: string
+            required: false
+            description: Campo che riporta, in caso di errore di validazione lato NPG, il relativo codice
+            classification: public
+            example: "ABC123"
+      updatedApplications:
+        title: updatedApplications
+        pii: false 
+        type: array
+        required: false
+        description: Dati modificati relativi alle applicazioni, sezine presente soltanto per gli eventi di update
+        classification: public 
+        items:
+          type: object
+          fields:
+            _id:
+              title: updatedApplications
+              pii: false 
+              type: string
+              required: true
+              description: Identificativo del'applicazione, es. PAGOPA
+              classification: public
+              example: "PAGOPA" 
+            status:
+              title: status
+              pii: false 
+              type: string
+              required: true
+              enum:
+                - ENABLED
+                - DISABLED
+              description: Stato del wallet per l'applicazione
+              classification: public 
+              example: "ENABLED"
+            creationDate:
+              title: creationDate
+              pii: false 
+              type: string
+              required: true
+              description: Data creazione dell'applicazione
+              classification: public
+              example: "2024-10-28T09:19:58.395302808Z" 
+            updateDate:
+              title: updateDate
+              pii: false 
+              type: string
+              required: true
+              description: Data ultima modifica dell'applicazioen
+              classification: public
+              example: "2024-10-28T09:21:01.197445280Z" 
+
+### schema
+schema:
+  type: avro 
+  specification:
+    models:
+      - wallet:  |-
+          {
+            "type": "record",
+            "name": "WalletOnboardCompletedEvent",
+            "fields": [
+              {
+                "name": "id",
+                "type": "string"
+              },
+              {
+                "name": "timestamp",
+                "type": "string"
+              },
+              {
+                "name": "type",
+                "type": "string"
+              },
+              {
+                "name": "walletId",
+                "type": "string"
+              },
+              {
+                "name": "auditWallet",
+                "type": [
+                  "null",
+                  {
+                    "type": "record",
+                    "name": "auditWallet",
+                    "fields": [
+                      {
+                        "name": "paymentMethodId",
+                        "type": ["null", "string"]
+                      },
+                      {
+                        "name": "creationDate",
+                        "type": ["null", "string"]
+                      },
+                      {
+                        "name": "updateDate",
+                        "type": ["null", "string"]
+                      },
+                      {
+                        "name": "applications",
+                        "type": ["null", {
+                          "type": "array",
+                          "items": {
+                            "type": "record",
+                            "name": "applications",
+                            "fields": [
+                              {
+                                "name": "_id",
+                                "type": "string"
+                              },
+                              {
+                                "name": "status",
+                                "type": "string"
+                              },
+                              {
+                                "name": "creationDate",
+                                "type": "string"
+                              },
+                              {
+                                "name": "updateDate",
+                                "type": "string"
+                              }
+                            ]
+                          }
+                        }]
+                      },
+                      {
+                        "name": "details",
+                        "type": ["null", {
+                          "type": "record",
+                          "name": "details",
+                          "fields": [
+                            {
+                              "name": "type",
+                              "type": "string"
+                            },
+                            {
+                              "name": "cardBrand",
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            {
+                              "name": "pspId",
+                              "type": ["null", "string"]
+                            }
+                          ]
+                        }]
+                      },
+                      {
+                        "name": "status",
+                        "type": ["null", "string"]
+                      },
+                      {
+                        "name": "validationOperationId",
+                        "type": ["null", "string"]
+                      },
+                      {
+                        "name": "validationOperationResult",
+                        "type": ["null", "string"]
+                      },
+                      {
+                        "name": "validationOperationTimestamp",
+                        "type": ["null", "string"]
+                      },
+                      {
+                        "name": "validationErrorCode",
+                        "type": ["null", "string"]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "updatedApplications",
+                "type": [
+                  "null",
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "record",
+                      "name": "updatedApplications",
+                      "fields": [
+                        {
+                          "name": "_id",
+                          "type": "string"
+                        },
+                        {
+                          "name": "status",
+                          "type": "string"
+                        },
+                        {
+                          "name": "creationDate",
+                          "type": "string"
+                        },
+                        {
+                          "name": "updateDate",
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+
+### examples
+examples:
+  - type: json
+    model: wallet
+    description: Esempio di evento wallet
+    data: |- 
+      {
+          "id": "193e2ec5-ac66-41d5-99c0-415621e92d05",
+          "timestamp": "2024-10-28T09:20:49.076091947Z",
+          "type": "WalletOnboardCompletedEvent",
+          "walletId": "5be2080b-69a2-4875-91dc-185891dfe9f5",
+          "auditWallet": {
+              "paymentMethodId": "0d1450f4-b993-4f89-af5a-1770a45f5d71",
+              "creationDate": "2024-10-28T09:19:58.512332825Z",
+              "updateDate": "2024-10-28T09:20:49.050160654Z",
+              "applications": [
+                  {
+                      "_id": "PAGOPA",
+                      "status": "ENABLED",
+                      "creationDate": "2024-10-28T09:19:58.395302808Z",
+                      "updateDate": "2024-10-28T09:19:58.395303146Z"
+                  }
+              ],
+              "details": {
+                  "type": "PAYPAL",
+                  "cardBrand": null,
+                  "pspId": "BCITITMM"
+              },
+              "status": "VALIDATED",
+              "validationOperationId": "572632648066943029",
+              "validationOperationResult": "EXECUTED",
+              "validationOperationTimestamp": "2024-10-28T09:20:48.610Z",
+              "validationErrorCode": "ABC123"
+          },
+          "updatedApplications": [
+              {
+                  "_id": "PAGOPA",
+                  "status": "ENABLED",
+                  "creationDate": "2024-10-28T09:19:58.395302808Z",
+                  "updateDate": "2024-10-28T09:21:01.197445280Z"
+              }
+          ]
+      }
+
+### service levels
+servicelevels:
+  availability:
+    description: Il servizio è garantito 24/7. 
+    percentage: 99.9%
+  retention:
+    description: Dati di configurazione, la data di scadenza non è applicabile.
+    unlimited: true
+  latency:
+    description: I dati sono disponibili entro pochi minuti dall'inserimento, dalla modifica o dalla cancellazione.
+    threshold: PT1H
+  freshness:
+    description: I dati vengono importati quasi in tempo reale.
+  frequency:
+    description: Costantemente
+    type: streaming
+    interval: every updates
+  support:
+    description: I dati sono disponibili 24/7.
+    time: 24/7
+    responseTime: 1h
+  backup:
+    description: I dati sono replicati in due regioni distinte.
+    recoveryTime: 5m
+    recoveryPoint: 0m 
+  growth:
+    rate: "100000 record/year"
+    size: 160MB
+  updates:
+    fields: 
+      - walletId
+    lastUpdateField: timestamp
+  deletes:
+    mode: hard
+    fields: 
+      - walletId
+
+quality:
+  type: SodaCL
+  dataset: pagopa.silver_wallet
+  specification: |-
+    checks for wallet:
+      - row_count > 0
+      - duplicate_count(id) = 0
+      - missing_count(id) = 0
+      - missing_count(`timestamp`) = 0
+      - missing_count(type) = 0
+      - missing_count(walletId) = 0
+      - count_double_wallet_id = 0:
+          name: Controllo singolo walletid in tabella gold
+          count_double_wallet_id query: |
+            SELECT
+                COUNT(*)
+            FROM (
+                SELECT
+                    walletid
+                FROM
+                    pagopa.gold_wallet
+                GROUP BY
+                    walletid
+                HAVING
+                    COUNT(*) > 1
+            ) AS duplicates
+      - count_bronze_silver = 0:
+          name: Controllo count bronze silver
+          count_bronze_silver query: |
+            SELECT
+                CASE
+                    WHEN silver_count = bronze_count THEN 0
+                    ELSE 1
+                END AS result
+            FROM (
+                SELECT
+                    COUNT(*) AS silver_count
+                FROM pagopa.silver_wallet
+                WHERE dl_event_tms < CAST(CAST(DATE_SUB(NOW(), 1) AS STRING) AS TIMESTAMP)
+            ) silver,
+            (
+                SELECT
+                    COUNT(DISTINCT id) AS bronze_count
+                FROM pagopa.bronze_wallet
+                WHERE dl_event_tms < CAST(CAST(DATE_SUB(NOW(), 1) AS STRING) AS TIMESTAMP)
+            ) bronze
+      - count_audit_wallet_null = 0:
+          name: Controllo campi audit wallet not null
+          count_audit_wallet_null query: |
+            SELECT COUNT(*)
+            FROM pagopa.bronze_wallet
+            WHERE type = 'WalletOnboardCompletedEvent'
+              AND (
+                auditwallet.paymentMethodId IS NULL
+                OR auditwallet.creationDate IS NULL
+                OR auditwallet.updateDate IS NULL
+                OR auditwallet.details.type IS NULL
+                OR auditwallet.status IS NULL
+              )
+      - count_audit_wallet_applications_null = 0:
+          name: Controllo campi audit wallet applications not null
+          count_audit_wallet_applications_null query: |
+            SELECT COUNT(*)
+            FROM pagopa.bronze_wallet t
+            LEFT JOIN t.auditWallet.applications awa
+            WHERE type = 'WalletOnboardCompletedEvent'
+            AND (
+              awa._id IS NULL
+              OR awa.status IS NULL
+              OR awa.creationDAte IS NULL
+              OR awa.updateDate IS NULL
+            )

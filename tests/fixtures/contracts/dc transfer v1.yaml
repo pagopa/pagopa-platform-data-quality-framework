@@ -1,0 +1,482 @@
+dataContractSpecification: 0.9.3
+id: urn:pagopa:gpd:transfer
+info:
+  title: Transfer Contract
+  description: Oggetto che rappresenta l'entità Transfer
+  owner: pagoPA QA-Team
+  version: 0.0.1
+  contact:
+    name: Andrea Ferracci (Data Owner)
+    url: https://pagopa.atlassian.net/wiki/spaces/PPR/pages/1307279559/DR+-+Ingestion+dati+GPD
+    email: andrea.ferracci@pagopa.it
+    slack-channel: https://pagopaspa.slack.com/archives/C015HN4UZAM
+
+### servers
+servers:
+  production:
+    type: kafka
+    host: sb://pagopa-d-itn-observ-gpd-evh.servicebus.windows.net
+    topic: gpd-ingestion.apd.transfer
+    format: json
+  uat:
+    type: kafka
+    host: sb://pagopa-u-itn-observ-gpd-evh.servicebus.windows.net
+    topic: gpd-ingestion.apd.transfer
+    format: json
+
+### terms
+terms:
+  usage: >
+    - Gli eventi di delete `d` presentano soltanto la sezione `before`, mentre gli eventi di create `c`, update `u`
+      e read `r` prevedono soltanto la sezione `afetr`
+    - Gli eventi di delete si riferiscono ad eventi di cancellazione fisica sul database, il campo effettivamente
+      valorizzato in caso di delete è `id`, tutti gli altri campi indicati all'interno dello schema vengono inviati
+      a blank `""` o zero `0`
+    - L'evento è sempre legato ad una ed una sola opzione di pagamento (payment-option), il campo payment_option_id
+      agisce fa FK sul campo id della payment-option
+  limitations: >
+    - Nessuna limitazione da segnalare
+  noticePeriod: P1M
+
+### models
+models:
+  transfer:
+    description: Modello utilizzato per rappresentare l'entità `transfer`
+    fields:
+      after:
+        type: record
+        required: false
+        description: Sezione che contiente il contenuto dei campi a valle di un'operazione di update o create
+        fields:
+          id:
+            title: Chiave primaria
+            type: int
+            required: true
+            description: Chiave primaria sulla tabella sorgente del transfer
+            example: "822999"
+            pii: false        
+          payment_option_id:
+            title: FK Opzione di pagamento
+            type: int
+            required: true
+            description: FK tabella payment-option (in relazione con payment-position.id)
+            example: "805523"
+            pii: false
+          amount:
+            title: Importo
+            type: long
+            required: true
+            description: Importo del transfer in euro cents
+            example: "10150"
+            pii: false
+          category:
+            title: Tassonomia pagamento
+            type: string
+            required: false
+            description: Tassonomia del riversamento
+            example: "9/0101108TS/"
+            pii: false
+          transfer_id:
+            title: Indice transfer
+            type: string
+            required: true
+            description: indice del transfer all'interno della opzione di pagamento
+            example: "1"
+            pii: false
+          inserted_date:
+            title: Data inserimento
+            type: long
+            required: true
+            description: Data inserimento del transfer
+            example: "1731515637624188"
+            pii: false
+          iuv:
+            title: IUV
+            type: string
+            required: true
+            description: identificativo univoco dell'opzione di pagamento
+            example: "65037958017077450"
+            pii: false
+          organization_fiscal_code:
+            title: Codice fiscale EC
+            type: string
+            required: true
+            description: Codice fiscale ente creditore
+            example: "77777777777"
+            pii: false
+          status:
+            title: Stato
+            type: string
+            enum:
+              - T_UNREPORTED
+              - T_REPORTED
+            required: true
+            description: Stato del transfer
+            example: "T_UNREPORTED"
+            pii: false
+      before:
+        type: record
+        required: false
+        description: Sezione che contiente il contenuto dei campi a valle di un'operazione di delete
+        fields:
+          id:
+            title: Chiave primaria
+            type: int
+            required: true
+            description: Chiave primaria sulla tabella sorgente del transfer
+            example: "822999"
+            pii: false            
+          payment_option_id:
+            title: FK opzione di pagamento
+            type: int
+            required: true
+            description: FK tabella payment-option (in relazione con payment-position.id)
+            example: "0"
+            pii: false
+          amount:
+            title: Importo
+            type: long
+            required: true
+            description: Importo del transfer in euro cents
+            example: "0"
+            pii: false
+          category:
+            title: Tassonomia
+            type: string
+            required: false
+            description: Tassonomia del riversamento
+            example: ""
+            pii: false
+          transfer_id:
+            title: Indice transfer
+            type: string
+            required: true
+            description: indice del transfer all'interno della opzione di pagamento
+            example: ""
+            pii: false
+          inserted_date:
+            title: Data inserimento
+            type: long
+            required: true
+            description: Data inserimento del transfer
+            example: "0"
+            pii: false
+          iuv:
+            title: IUV
+            type: string
+            required: true
+            description: identificativo univoco dell'opzione di pagamento
+            example: ""
+            pii: false
+          organization_fiscal_code:
+            title: Codice fiscale EC
+            type: string
+            required: true
+            description: Codice fiscale ente creditore
+            example: ""
+            pii: false
+      op:
+        title: Tipologia evento
+        type: string
+        required: true
+        description: Tipo evento (r=read, c=create, u=update, d=delete)
+        example: "u"
+        enum:
+          - r
+          - c
+          - u
+          - d
+        pii: false
+      ts_ms:
+        title: Data ultima modifica in millis local timezone
+        type: long
+        required: true
+        description: Data ultima modifica evento
+        example: "1731515641609"
+        pii: false
+      ts_us:
+        title: Data ultima modifica in millis US timezone
+        type: long
+        required: true
+        description: Data ultima modifica evento
+        example: "1731515641609002"
+        pii: false
+      ts_ns:
+        title: Data ultima modifica in nanosecondi local timezone
+        type: long
+        required: true
+        description: Data ultima modifica evento
+        example: "1731515641609002625"
+        pii: false
+
+### schema
+schema:
+  type: avro 
+  specification:
+    models:
+      - transfer:  |-
+          {
+            "type": "record",
+            "name": "TransferEvent",
+            "fields": [
+              {
+                "name": "after",
+                "type": [
+                  "null",
+                  {
+                    "type": "record",
+                    "name": "AfterRecord",
+                    "fields": [
+                      {"name": "id", "type": "int"},
+                      {"name": "amount", "type": "long"},
+                      {"name": "category", "type": ["null", "string"]},
+                      {"name": "transfer_id", "type": "string"},
+                      {"name": "inserted_date", "type": "long"},
+                      {"name": "iuv", "type": "string"},
+                      {"name": "organization_fiscal_code", "type": "string"},
+                      {"name": "payment_option_id", "type": "int"},
+                      {"name": "status", "type": "string"}
+                    ]
+                  }
+                ],
+                "default": null
+              },
+              {
+                "name": "before",
+                "type": [
+                  "null",
+                  {
+                    "type": "record",
+                    "name": "BeforeRecord",
+                    "fields": [
+                      {"name": "id", "type": "int"},
+                      {"name": "amount", "type": "long"},
+                      {"name": "category", "type": ["null", "string"]},
+                      {"name": "transfer_id", "type": "string"},
+                      {"name": "inserted_date", "type": "long"},
+                      {"name": "iuv", "type": "string"},
+                      {"name": "payment_option_id", "type": "int"},
+                      {"name": "organization_fiscal_code", "type": "string"}
+                    ]
+                  }
+                ],
+                "default": null
+              },
+              {"name": "op", "type": "string"},
+              {"name": "ts_ms", "type": "long"},
+              {"name": "ts_us", "type": "long"},
+              {"name": "ts_ns", "type": "long"}
+            ]
+          }
+
+### examples
+examples:
+  - type: json
+    model: transfer
+    description: Esempio di evento transfer
+    data: |- 
+      {
+        "after": {
+          "id": 822999,
+          "amount": 10150,
+          "category": "9/0101108TS/",
+          "transfer_id": "1",
+          "inserted_date": 1731515637624188,
+          "iuv": "65037958017077450",
+          "organization_fiscal_code": "77777777777",
+          "payment_option_id": 805523,
+          "status": "T_UNREPORTED"
+        },
+        "before": {
+          "id": 822999,
+          "amount": 0,
+          "category": "",
+          "transfer_id": "",
+          "inserted_date": 0,
+          "iuv": "",
+          "payment_option_id": 0,
+          "organization_fiscal_code": ""
+        },
+        "op": "u",
+        "ts_ms": 1731515641609,
+        "ts_us": 1731515641609002,
+        "ts_ns": 1731515641609002625
+      }
+
+### service levels
+servicelevels:
+  availability:
+    description: Il servizio è garantito 24/7 
+    percentage: 99.9%
+  retention:
+    description: si tratta di un dato di configurazioe che dipende dalla tipologia della posizione debitoria, varia da 24h a 1 anno
+    unlimited: true
+  latency:
+    description: Gli eventi di lettura, inserimento, modifica e cancellazione, vengono recepite entro 2 minuti
+    threshold: PT1H
+  freshness:
+    description: I dati vengono importati in modalità near real time
+  frequency:
+    description: In modo continuo
+    type: streaming
+    interval: ogni tipologia di modifica
+  support:
+    description: Disponibile 24/7
+    time: 24/7
+    responseTime: 30m
+  backup:
+    description: I dati sono replicati su due region
+    recoveryTime: 5m
+    recoveryPoint: 0m 
+  growth:
+    rate: "25000000 record/year"
+    size: 11GB
+  updates:
+    fields: 
+      - after.amount
+      - after.category
+      - after.transfer_id
+      - after.inserted_date
+      - after.iuv
+      - after.organization_fiscal_code
+      - after.status
+      - after.payment_option_id
+    lastUpdateField: ts_ms
+  deletes:
+    mode: logic
+    fields:
+      - before.id
+    statusFields:
+      - op
+    deleteTimeField: ts_ms
+
+quality:
+  type: SodaCL
+  dataset: pagopa.silver_gpd_transfer
+  specification: |-
+    checks for transfer:
+      - row_count > 0
+      - missing_count(op) = 0
+      - missing_count(ts_ms) = 0
+      - missing_count(ts_ns) = 0
+      - missing_count(ts_us) = 0
+      - freshness(dl_event_tms) < 1d:
+          name: Data is fresh
+      - count_before_delete = 0:
+          name: Validazione before per le operazioni di delete
+          count_before_delete query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_transfer
+            WHERE
+              (op = 'd' AND before.id IS NULL)
+              OR
+              (op = 'd' AND (
+                  before.payment_option_id != 0
+                  OR before.amount != 0
+                  OR before.category != ''
+                  OR before.transfer_id != ''
+                  OR before.inserted_date != 0
+                  OR before.iuv != ''
+                  OR before.organization_fiscal_code != ''
+              ))
+      - count_create_read_update_null = 0:
+          name: Validazione after per operazioni di create, read, and update
+          count_create_read_update_null query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_transfer
+            WHERE op IN ('c','r','u') AND after.id is NULL
+      # DISABLED: known upstream issue, tracking in PIDM-1751 and DLTE-828, ETA 2026-Q2
+      # - unix_timestamp_microseconds_length_inserted_date = 0:
+      #     name: Validazione lunghezza Unix timestamp in microsecondi inserted_date
+      #     unix_timestamp_microseconds_length_inserted_date query: |
+      #       SELECT COUNT(*)
+      #       FROM pagopa.silver_gpd_transfer
+      #       WHERE op IN ('c', 'r', 'u') AND LENGTH(CAST(after.inserted_date AS STRING)) < 16
+
+
+      # ============================================================
+      # Check Not Null (Filtrati per escludere eventi di Delete)
+      # ============================================================
+      - missing_count(after.id) = 0:
+          name: fld__vld__id__not_null
+          filter: op IN ('c', 'r', 'u')
+      - missing_count(after.payment_option_id) = 0:
+          name: fld__vld__payment_option_id__not_null
+          filter: op IN ('c', 'r', 'u')
+      - missing_count(after.amount) = 0:
+          name: fld__vld__amount__not_null
+          filter: op IN ('c', 'r', 'u')
+      - missing_count(after.transfer_id) = 0:
+          name: fld__vld__transfer_id__not_null
+          filter: op IN ('c', 'r', 'u')
+      - missing_count(after.inserted_date) = 0:
+          name: fld__vld__inserted_date__not_null
+          filter: op IN ('c', 'r', 'u')
+      - missing_count(after.iuv) = 0:
+          name: fld__vld__iuv__not_null
+          filter: op IN ('c', 'r', 'u')
+      - missing_count(after.organization_fiscal_code) = 0:
+          name: fld__vld__organization_fiscal_code__not_null
+          filter: op IN ('c', 'r', 'u')
+      - missing_count(after.status) = 0:
+          name: fld__vld__status__not_null
+          filter: op IN ('c', 'r', 'u')
+
+      # ============================================================
+      # Check Pattern P.IVA / Codice Fiscale
+      # ============================================================
+      - invalid_count(after.organization_fiscal_code) = 0:
+          name: fld__vld__org_fiscal_code__cf_piva_pattern
+          filter: op IN ('c', 'r', 'u')
+          valid regex: '^([A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]|[0-9]{11})$'
+
+      # ============================================================
+      # Campi Enum
+      # ============================================================
+      - invalid_count(after.status) = 0:
+          name: fld__vld__status__enum
+          filter: op IN ('c', 'r', 'u')
+          valid values: ['T_UNREPORTED', 'T_REPORTED']
+
+      # ============================================================
+      # Check importo (formato eurocent: intero non negativo)
+      # ============================================================
+      - failed rows:
+          name: fld__vld__amount__amount_eurocent
+          fail query: |
+            SELECT *
+            FROM pagopa.silver_gpd_transfer
+            WHERE op IN ('c', 'r', 'u')
+              AND after.amount IS NOT NULL
+              AND (after.amount < 0 OR after.amount != FLOOR(after.amount))
+
+      # ============================================================
+      # Check Pattern Tassonomia
+      # ============================================================
+      - invalid_count(after.category) = 0:
+          name: fld__vld__category__pattern
+          filter: op IN ('c', 'r', 'u')
+          # Regola stretta da documentazione: [Numero]/[7 Numeri][2 Lettere]/
+          valid regex: '^\d/\d{7}[A-Z]{2}/$'
+
+      # ============================================================
+      # Validità Valore Tassonomia (Lookup su anagrafica)
+      # ============================================================
+      # L'elenco ufficiale della tassonomia (da developer.pagopa.it) 
+      # deve essere presente come tabella sul Datalake per permettere la JOIN.
+      # Se la tabella non è ancora stata creata, tieni commentata la parte di JOIN/WHERE.
+      - failed rows:
+          name: fld__vld__category__lookup
+          fail query: |
+            SELECT t.*
+            FROM pagopa.silver_gpd_transfer t
+            -- Scommentare le righe seguenti quando la tabella dict_tassonomie è disponibile su Cloudera
+            /*
+            LEFT JOIN pagopa.dict_tassonomie dict 
+              ON t.after.category = dict.codice_tassonomia
+            WHERE t.op IN ('c', 'r', 'u')
+              AND t.after.category IS NOT NULL
+              AND t.after.category != ''
+              AND dict.codice_tassonomia IS NULL
+            */
+            WHERE 1=0 -- Rimuovere questo WHERE fittizio quando si abilita la JOIN
