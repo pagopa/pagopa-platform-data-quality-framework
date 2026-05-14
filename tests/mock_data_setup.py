@@ -171,8 +171,8 @@ def main():
 
     spark.sql("CREATE DATABASE IF NOT EXISTS pagopa")
 
-    option_csv_path = "./dq_framework/tests/fixtures/data/mock_silver_gpd_payment_option.csv"
-    position_csv_path = "./dq_framework/tests/fixtures/data/mock_silver_gpd_payment_position.csv"
+    option_csv_path = "./tests/fixtures/data/mock_silver_gpd_payment_option.csv"
+    position_csv_path = "./tests/fixtures/data/mock_silver_gpd_payment_position.csv"
 
     try:
         setup_payment_option(spark, option_csv_path)

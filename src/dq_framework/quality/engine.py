@@ -9,7 +9,6 @@ from dq_framework.common.config import AppConfig
 from .contract_parser import parse_contract_file
 from .result_writer import RESULTS_SCHEMA, process_scan_results
 from .soda_executor import run_dataframe_soda_scan
-from .impala_executor import run_impala_soda_scan
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +80,7 @@ def run_pipeline(
     # 1. Esecuzione tramite Soda / PySpark
     soda_checks = run_dataframe_soda_scan(spark, contract, config)
     
-    logger.info(f"Esecuzione run_impala_soda_scan su Impala")
+    #logger.info(f"Esecuzione run_impala_soda_scan su Impala")
     # 2. Esecuzione diretta su Impala tramite le query in "quality:"
     #impala_checks = run_impala_soda_scan(spark, contract, config)
     

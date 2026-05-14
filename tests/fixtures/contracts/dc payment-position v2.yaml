@@ -812,7 +812,7 @@ quality:
               )
 
       # ============================================================
-      # Controlli Cross-Entity (xref) — JOIN con pagopa.bronze_gpd_payment_option
+      # Controlli Cross-Entity (xref) — JOIN con pagopa.silver_gpd_payment_option
       # ============================================================
       # Integrità referenziale: ogni payment_option.payment_position_id deve trovare
       # corrispondenza in silver_gpd_payment_position.after.id
@@ -820,7 +820,7 @@ quality:
           name: xref__cns__payment_option__referential_integrity
           count_orphan_payment_options query: |
             SELECT COUNT(*)
-            FROM pagopa.bronze_gpd_payment_option po
+            FROM pagopa.silver_gpd_payment_option po
             WHERE po.op IN ('c', 'r', 'u')
               AND po.after.payment_position_id IS NOT NULL
               AND NOT EXISTS (
@@ -839,7 +839,7 @@ quality:
           count_invalid_cross_fiscal_codes query: |
             SELECT COUNT(*)
             FROM pagopa.silver_gpd_payment_position pp
-            JOIN pagopa.bronze_gpd_payment_option po
+            JOIN pagopa.silver_gpd_payment_option po
               ON pp.after.id = po.after.payment_position_id
             WHERE pp.op IN ('c', 'r', 'u')
               AND po.op IN ('c', 'r', 'u')
@@ -858,7 +858,7 @@ quality:
           count_option_due_date_exceeds_position_max query: |
             SELECT COUNT(*)
             FROM pagopa.silver_gpd_payment_position pp
-            JOIN pagopa.bronze_gpd_payment_option po
+            JOIN pagopa.silver_gpd_payment_option po
               ON pp.after.id = po.after.payment_position_id
             WHERE pp.op IN ('c', 'r', 'u')
               AND po.op IN ('c', 'r', 'u')
