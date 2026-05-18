@@ -1,5 +1,0 @@
-checks for dim_customers:
-  - row_count > 5:
-      name: test20
-  - row_count > 0:
-      name: test6
