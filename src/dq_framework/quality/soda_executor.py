@@ -13,17 +13,11 @@ logger = logging.getLogger(__name__)
 
 def run_dataframe_soda_scan(spark: SparkSession, contract: dict, config: AppConfig) -> list[dict]:
     """Esegue la scansione SodaCL sulla tabella Spark e restituisce i check grezzi."""
-    
-    limit_msg = f"(LIMIT {config.table_limit})" if config.table_limit and config.table_limit > 0 else "(NESSUN LIMITE)"
-    logger.info(f"Caricamento dataframe per dataset: {contract['dataset']} {limit_msg}")
+    logger.info(f"Caricamento dataframe per dataset: {contract['dataset']} (LIMIT {config.table_limit})")
 
     try:
         safe_dataset = ".".join([f"`{part}`" for part in contract["dataset"].split(".")])
-        df = spark.table(safe_dataset)
-        
-        if config.table_limit and config.table_limit > 0:
-            df = df.limit(config.table_limit)
-            
+        df = spark.table(safe_dataset).limit(config.table_limit)
         df.createOrReplaceTempView(contract["table_name"])
     except Exception as e:
         logger.error(f"Errore caricamento tabella Spark {contract['dataset']}: {e}")
