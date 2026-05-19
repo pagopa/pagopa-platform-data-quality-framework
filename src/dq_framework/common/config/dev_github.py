@@ -8,5 +8,5 @@ DEV_GITHUB_CONFIG = AppConfig(
     default_ref="main",
     soda_host="cloud.soda.io",
     data_source="lg_spark",
-    table_limit=999999999999,
+    table_limit=0,
 )
