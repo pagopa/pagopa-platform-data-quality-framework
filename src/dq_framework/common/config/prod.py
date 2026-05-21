@@ -9,4 +9,10 @@ PROD_CONFIG = AppConfig(
     soda_host="cloud.soda.io",
     data_source="Raptor Lake",
     table_limit=200,
+    results_database="pagopa_dev",
+    results_write_enabled=True,
+    # se la tabella esiste già in metastore, lasciare None: la CREATE TABLE IF NOT EXISTS sarà
+    # comunque no-op. Valorizzare solo se si vuole che il primo run la crei su un path S3 specifico,
+    # es. "s3a://pdnd-prod-dl-1/warehouse/tablespace/external/hive/pagopa_qa.db/dqf_gpd_results"
+    results_table_location=None,
 )

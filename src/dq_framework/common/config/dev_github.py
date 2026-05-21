@@ -9,4 +9,5 @@ DEV_GITHUB_CONFIG = AppConfig(
     soda_host="cloud.soda.io",
     data_source="lg_spark",
     table_limit=0,
+    results_database="pagopa_dev",
 )

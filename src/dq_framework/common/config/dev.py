@@ -9,4 +9,5 @@ DEV_CONFIG = AppConfig(
     soda_host="cloud.soda.io",
     data_source="pagopa_qa",
     table_limit=50,
+    results_database="pagopa_dev",
 )

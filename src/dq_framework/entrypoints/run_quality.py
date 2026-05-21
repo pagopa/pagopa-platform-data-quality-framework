@@ -20,6 +20,7 @@ Invocazione da Airflow DAG:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from dq_framework.common.config import load_config
@@ -56,6 +57,22 @@ def _parse_args(
         default=default_ref,
         help="Branch, tag o commit del repository. Default: valore configurato per l'ambiente.",
     )
+    parser.add_argument(
+        "--dag-id",
+        default=os.environ.get("AIRFLOW_CTX_DAG_ID"),
+        help=(
+            "Identificativo del DAG Airflow. "
+            "Se omesso usa la variabile d'ambiente AIRFLOW_CTX_DAG_ID."
+        ),
+    )
+    parser.add_argument(
+        "--airflow-run-id",
+        default=os.environ.get("AIRFLOW_CTX_DAG_RUN_ID"),
+        help=(
+            "Identificativo del DAG run Airflow. "
+            "Se omesso usa la variabile d'ambiente AIRFLOW_CTX_DAG_RUN_ID."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -73,6 +90,8 @@ def main(argv: list[str] | None = None) -> None:
         repository=args.repository,
         ref=args.ref,
         config=config,
+        dag_id=args.dag_id,
+        airflow_run_id=args.airflow_run_id,
     )
 
 
