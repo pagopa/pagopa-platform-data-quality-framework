@@ -1,0 +1,527 @@
+dataContractSpecification: 0.9.3
+id: urn:pagopa:gpd:payment-position
+info:
+  title: Payment Position Contract
+  description: Oggetto che rappresenta l'entità Posiione Debitoria
+  owner: pagoPA QA-Team
+  version: 0.0.1
+  contact:
+    name: Andrea Ferracci (Data Owner)
+    url: https://pagopa.atlassian.net/wiki/spaces/PPR/pages/1307279559/DR+-+Ingestion+dati+GPD
+    email: andrea.ferracci@pagopa.it
+    slack-channel: https://pagopaspa.slack.com/archives/C015HN4UZAM
+
+### servers
+servers:
+  production:
+    type: kafka
+    host: sb://pagopa-p-itn-observ-gpd-evh.servicebus.windows.net
+    topic: gpd-ingestion.apd.payment_position
+    format: json
+  uat: 
+    type: kafka
+    host: sb://pagopa-u-itn-observ-gpd-evh.servicebus.windows.net
+    topic: gpd-ingestion.apd.payment_position
+    format: json
+
+### terms
+terms:
+  usage: >
+    - Gli eventi di delete `d` presentano soltanto la sezione `before`, mentre gli eventi di create `c`, update `u`
+      e read `r` prevedono soltanto la sezione `afetr`
+    - Gli eventi di delete si riferiscono ad eventi di cancellazione fisica sul database, il campo effettivamente
+      valorizzato in caso di delete è `id`, tutti gli altri campi indicati all'interno dello schema vengono inviati
+      a blank `""` o zero `0`
+  limitations: >
+    - Nessuna limitazione da segnalare
+  noticePeriod: P1M
+
+### models
+models:
+  payment-position:
+    description: Modello utilizzato per rappresentare l'entità `payment-position`
+    fields:
+      after:
+        type: record
+        required: false
+        description: Sezione che contiente il contenuto dei campi a valle di un'operazione di update o create
+        fields:
+          id:
+            title: Chiave primaria
+            type: int
+            required: true
+            description: Chiave primaria sulla tabella sorgente della posizione debitoria
+            example: "11"
+            pii: false
+          iupd:
+            title: IUPD
+            type: string
+            required: true
+            description: Identificativo Univoco della Posizione Debitoria (forma una chiave univoca con organization_fiscal_code)
+            example: "IUPD_183151"
+            pii: false
+          fiscal_code:
+            title: Codice Fiscale Debtore
+            type: string
+            required: true
+            description: Codice fiscale debitore tokenizzato
+            example: "d59f5b6e-0bd1-4e36-9c5d-51baf36df291"
+            pii: true
+          postal_code:
+            title: Codice avviamento postale debitore
+            type: string
+            required: false
+            description: Codice avviamento postale debitore
+            example: "89812"
+            pii: false
+          province:
+            title: Provinca residenza debitore
+            type: string
+            required: false
+            description: Provincia residenza debitore
+            example: "VV"
+            pii: false
+          max_due_date:
+            title: Max due date
+            type: long
+            required: true
+            description: Data scadenza massima della posizione debitoria (max della dueDate di tutte le opzioni di pagamento presenti)
+            example: "1734019828070000"
+            pii: false
+          min_due_date:
+            title: Min Due Date
+            type: long
+            required: true
+            description: Data scadena più vicina tra tutte le opzioni di pagamento presenti
+            example: "1734019828070000"
+            pii: false
+          organization_fiscal_code:
+            title: Codice fiscale EC
+            type: string
+            required: true
+            description: Codice fiscale Ente Creditore (forma una chiave univoca con iupd)
+            example: "77777777777"
+            pii: false
+          company_name:
+            title: Ragione Sociale
+            type: string
+            required: true
+            description: Ragione sociale ente creditore
+            example: "Testing S.p.A."
+            pii: false
+          publish_date:
+            title: Data Pubblicazione
+            type: long
+            required: false
+            description: Data di pubblicazione della posizione debitoria
+            example: "1731427830566126"
+            pii: false
+          region:
+            title: Regione
+            type: string
+            required: false
+            description: Regione debitore
+            example: "CA"
+            pii: false
+          status:
+            title: Stato
+            type: string
+            enum:
+              - DRAFT
+              - PUBLISHED
+              - VALID
+              - PAID
+              - EXPIRED
+              - INVALID
+              - REPORTED
+              - PARTIALLY_PAID
+            required: true
+            description: Stato della posizione debitoria (P = persona fisica, F = persona giuridica)
+            example: "PAID"
+            pii: false
+          type:
+            title: Tipologia Debitore
+            type: string
+            enum:
+              - G
+              - F
+            required: true
+            description: Tipologia debitore
+            example: "F"
+            pii: false
+          validity_date:
+            title: Data Inizio Validità
+            type: long
+            required: false
+            description: Data a pertire dalla quale la posizione debitoria entra nello stato VALID (pagabile)
+            example: "1731427830566126"
+            pii: false
+          switch_to_expired:
+            title: Stato EXPIRED automatico
+            type: boolean
+            required: true
+            description: | 
+              Indica se al sopraggiungimento della max_due_date la posizione debitoria deve essere messa automaticamente
+              nello stato EXPIRED (stato finale irreversibile)
+            example: "false"
+            pii: false
+          payment_date:
+            title: Data Pagamento
+            type: long
+            required: false
+            description: Data in cui è stata pagata la posizione debitoria
+            example: "1731427831276000"
+            pii: false
+          last_updated_date:
+            title: Data ultima modifica
+            type: long
+            required: true
+            description: Data di ultima modifica della posizione debitoria
+            example: "1731427833868537"
+            pii: false
+          inserted_date:
+            title: Data inserimento
+            type: long
+            required: true
+            description: Data inserimento della posizione debitoria
+            example: "1731427828077833"
+            pii: false
+          service_type:
+            title: Tipologia posizione debitoria
+            type: string
+            enum:
+              - GPD
+              - ACA
+              - WISP
+            required: false
+            description: Tipologia o natura della posizione debitoria (es. GPD, ACA o WISP)
+            example: GPD
+            pii: false
+      before:
+        type: record
+        required: false
+        description: Sezione che contiente il contenuto dei campi a valle di un'operazione di delete
+        fields:
+          id:
+            title: Chiave primaria
+            type: int
+            required: true
+            description: Chiave primaria sulla tabella sorgente della posizione debitoria
+            example: "17"
+            pii: false
+          iupd:
+            title: IUPD
+            type: string
+            required: false
+            description: Identificativo Univoco della Posizione Debitoria (forma una chiave univoca con organization_fiscal_code)
+            example: ""
+            pii: false
+          fiscal_code:
+            title: Codice fiscale debitore
+            type: string
+            required: false
+            description: Codice fiscale debitore
+            example: ""
+            pii: true
+          max_due_date:
+            title: Data scadenza masima
+            type: long
+            required: false
+            description: Data scadenza massima tra tutte le opzioni di pagamento presenti
+            example: "0"
+            pii: false
+          min_due_date:
+            title: Data scadenza minima
+            type: long
+            required: false
+            description: Data scadenza minima tra tutte le opzioni di pagamento presenti
+            example: "0"
+            pii: false
+          organization_fiscal_code:
+            title: Codice fiscale EC
+            type: string
+            required: false
+            description: Codice fiscale Ente Creditore (forma una chiave univoca con iupd)
+            example: ""
+            pii: false
+          company_name:
+            title: Ragione Sociale
+            type: string
+            required: false
+            description: Ragione sociale ente creditore
+            example: ""
+            pii: false
+          type:
+            title: Tipologia debitore
+            type: string
+            enum:
+              - G
+              - F
+            required: false
+            description: Stato della posizione debitoria (P = persona fisica, F = persona giuridica)
+            example: ""
+            pii: false
+          switch_to_expired:
+            title: Stato EXPIRED automatico
+            type: boolean
+            required: true
+            description: | 
+              Indica se al sopraggiungimento della max_due_date la posizione debitoria deve essere messa automaticamente
+              nello stato EXPIRED (stato finale irreversibile)
+            example: "false"
+            pii: false
+          last_updated_date:
+            title: Data ultima modifica
+            type: long
+            required: false
+            description: Data di ultima modifica della posizione debitoria
+            example: "0"
+            pii: false
+          inserted_date:
+            title: Data inserimento
+            type: long
+            required: false
+            description: Data inserimento della posizione debitoria
+            example: "0"
+            pii: false
+          service_type:
+            title: Tipologia posizione debitoria
+            type: string
+            enum:
+              - GPD
+              - ACA
+              - WISP
+            required: false
+            description: Tipologia o natura della posizione debitoria (es. GPD, ACA o WISP)
+            example: GPD
+            pii: false          
+      op:
+        title: Tipo evento
+        type: string
+        required: true
+        description: Tipo evento (r=read, c=create, u=update, d=delete)
+        example: "r"
+        enum:
+          - r
+          - c
+          - u
+          - d
+        pii: false
+      ts_ms:
+        title: Data ultima modifica in millis local timezone
+        type: long
+        required: true
+        description: Data ultima modifica evento
+        example: "1731429125321"
+        pii: false
+      ts_us:
+        title: Data ultima modifica in millis US timezone
+        type: long
+        required: true
+        description: Data ultima modifica evento
+        example: "1731429125321816"
+        pii: false
+      ts_ns:
+        title: Data ultima modifica in nanosecondi local timezone
+        type: long
+        required: true
+        description: Data ultima modifica evento
+        example: "1731429125321816583"
+        pii: false
+
+### schema
+schema:
+  type: avro 
+  specification:
+    models:
+      - payment-position:  |-
+          {
+            "type": "record",
+            "name": "EventData",
+            "fields": [
+              {
+                "name": "after",
+                "type": [
+                  "null",
+                  {
+                    "type": "record",
+                    "name": "AfterRecord",
+                    "fields": [
+                      {"name": "id", "type": "int"},
+                      {"name": "iupd", "type": "string"},
+                      {"name": "fiscal_code", "type": "string"},
+                      {"name": "postal_code", "type": ["null", "string"]},
+                      {"name": "province", "type": ["null", "string"]},
+                      {"name": "max_due_date", "type": "long"},
+                      {"name": "min_due_date", "type": "long"},
+                      {"name": "organization_fiscal_code", "type": "string"},
+                      {"name": "company_name", "type": "string"},
+                      {"name": "publish_date", "type": ["null", "long"]},
+                      {"name": "region", "type": ["null", "string"]},
+                      {"name": "status", "type": "string"},
+                      {"name": "type", "type": "string"},
+                      {"name": "validity_date", "type": ["null", "long"]},
+                      {"name": "switch_to_expired", "type": "boolean"},
+                      {"name": "payment_date", "type": ["null", "long"]},
+                      {"name": "last_updated_date", "type": "long"},
+                      {"name": "inserted_date", "type": "long"},
+                      {"name": "service_type", "type": ["null", "string"]}
+                    ]
+                  }
+                ],
+                "default": null
+              },
+              {
+                "name": "before",
+                "type": [
+                  "null",
+                  {
+                    "type": "record",
+                    "name": "BeforeRecord",
+                    "fields": [
+                      {"name": "id", "type": "int"},
+                      {"name": "iupd", "type": ["null", "string"]},
+                      {"name": "fiscal_code", "type": ["null", "string"]},
+                      {"name": "max_due_date", "type": ["null", "long"]},
+                      {"name": "min_due_date", "type": ["null", "long"]},
+                      {"name": "organization_fiscal_code", "type": ["null", "string"]},
+                      {"name": "company_name", "type": ["null", "string"]},
+                      {"name": "type", "type": ["null", "string"]},
+                      {"name": "switch_to_expired", "type": "boolean"},
+                      {"name": "last_updated_date", "type": ["null", "long"]},
+                      {"name": "inserted_date", "type": ["null", "long"]},
+                      {"name": "service_type", "type": ["null", "string"]}
+                    ]
+                  }
+                ],
+                "default": null
+              },
+              {"name": "op", "type": "string"},
+              {"name": "ts_ms", "type": "long"},
+              {"name": "ts_us", "type": "long"},
+              {"name": "ts_ns", "type": "long"}
+            ]
+          }
+
+### examples
+examples:
+  - type: json
+    model: payment-position
+    description: Esempio di evento payment-position
+    data: |- 
+      {
+        "after": {
+          "id": 11,
+          "iupd": "IUPD_183151",
+          "fiscal_code": "d59f5b6e-0bd1-4e36-9c5d-51baf36df291",
+          "postal_code": "89812",
+          "province": "VV",
+          "max_due_date": 1734019828070000,
+          "min_due_date": 1734019828070000,
+          "organization_fiscal_code": "77777777777",
+          "company_name": "Testing S.p.A.",
+          "publish_date": 1731427830566126,
+          "region": "CA",
+          "status": "PAID",
+          "type": "F",
+          "validity_date": 1731427830566126,
+          "switch_to_expired": false,
+          "payment_date": 1731427831276000,
+          "last_updated_date": 1731427833868537,
+          "inserted_date": 1731427828077833,
+          "service_type": "GPD"
+        },
+        "before": {
+          "id": 17,
+          "iupd": "",
+          "fiscal_code": "",
+          "max_due_date": 0,
+          "min_due_date": 0,
+          "organization_fiscal_code": "",
+          "company_name": "",
+          "type": "",
+          "switch_to_expired": false,
+          "last_updated_date": 0,
+          "inserted_date": 0,
+          "service_type": ""
+        },
+        "op": "r",
+        "ts_ms": 1731429125321,
+        "ts_us": 1731429125321816,
+        "ts_ns": 1731429125321816583
+      }
+
+### service levels
+servicelevels:
+  availability:
+    description: Il servizio è garantito 24/7 
+    percentage: 99.9%
+  retention:
+    description: si tratta di un dato di configurazioe che dipende dalla tipologia della posizione debitoria, varia da 24h a 1 anno
+    unlimited: true
+  latency:
+    description: Gli eventi di lettura, inserimento, modifica e cancellazione, vengono recepite entro 2 minuti
+    threshold: PT1H
+  freshness:
+    description: I dati vengono importati in modalità near real time
+  frequency:
+    description: In modo continuo
+    type: streaming
+    interval: ogni tipologia di modifica
+  support:
+    description: Disponibile 24/7
+    time: 24/7
+    responseTime: 30m
+  backup:
+    description: I dati sono replicati su due region
+    recoveryTime: 5m
+    recoveryPoint: 0m 
+  growth:
+    rate: "15000000 record/year"
+    size: 12GB
+  updates:
+    fields:
+      - after.id
+      - after.iupd
+      - after.fiscal_code
+      - after.postal_code
+      - after.province
+      - after.max_due_date
+      - after.min_due_date
+      - after.organization_fiscal_code
+      - after.company_name
+      - after.publish_date
+      - after.region
+      - after.status
+      - after.type
+      - after.validity_date
+      - after.switch_to_expired
+      - after.payment_date
+      - after.last_updated_date
+      - after.inserted_date
+      - after.service_type
+      - op
+      - ts_ms
+      - ts_us
+      - ts_ns
+    lastUpdateField: ts_ms
+  deletes:
+    mode: hard
+    fields:
+      - before.id
+
+quality:
+  type: SodaCL
+  dataset: pagopa.silver_gpd_payment_position
+  specification: |-
+    checks for payment-position:
+      - count_due_date_exceeds_max_due_date = 0:
+          name: xref__cns__gpd_payment_position__max_due_date_not_exceeded
+          count_due_date_exceeds_max_due_date query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position spp
+            JOIN pagopa.silver_gpd_payment_option spo
+              ON spo.after.payment_position_id = spp.after.id
+            WHERE spp.op IN ('c', 'r', 'u')
+              AND spo.op IN ('c', 'r', 'u')
+              AND spo.after.due_date > spp.after.max_due_date

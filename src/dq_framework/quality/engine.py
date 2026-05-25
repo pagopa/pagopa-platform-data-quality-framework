@@ -152,18 +152,11 @@ def run_pipeline(
 
     logger.info(f"Esecuzione run_dataframe_soda_scan tramite Soda / PySpark")
     # 1. Esecuzione tramite Soda / PySpark
-    soda_checks = run_dataframe_soda_scan(spark, contract, config)
+    soda_checks, total_rows = run_dataframe_soda_scan(spark, contract, config)
 
-    #logger.info(f"Esecuzione run_impala_soda_scan su Impala")
-    # 2. Esecuzione diretta su Impala tramite le query in "quality:"
-    #impala_checks = run_impala_soda_scan(spark, contract, config)
-
-    # 3. Unione dei risultati
-    all_combined_checks = soda_checks #+ impala_checks
-
-    if all_combined_checks:
+    if soda_checks:
         rows = process_scan_results(
-            scan_checks      = all_combined_checks,
+            scan_checks      = soda_checks,
             contract_title   = contract["contract_title"],
             contract_version = contract["contract_version"],
             table_name       = contract["table_name"],
@@ -172,11 +165,12 @@ def run_pipeline(
             run_id           = run_id,
             dag_id           = effective_dag_id,
             airflow_run_id   = airflow_run_id,
+            row_count_total  = total_rows,
         )
         all_rows.extend(rows)
-        _log_contract_summary(all_combined_checks, contract["contract_title"])
+        _log_contract_summary(soda_checks, contract["contract_title"])
     else:
-        logger.warning("Nessun check restituito dallo scan o da Impala.")
+        logger.warning("Nessun check restituito dallo scan Soda.")
 
     if all_rows:
         df_results = spark.createDataFrame(all_rows, schema=RESULTS_SCHEMA)

@@ -75,20 +75,6 @@ def _parse_check_name(name: str) -> tuple[Optional[str], Optional[str], Optional
     return category, dimension, column
 
 
-def _extract_row_count(checks: list[dict]) -> Optional[int]:
-    """Cerca il valore del row_count nei check processati."""
-    for chk in checks:
-        metrics = chk.get("metrics", []) or []
-        if any("row_count" in str(m) for m in metrics):
-            val = (chk.get("diagnostics") or {}).get("value")
-            if val is not None:
-                try:
-                    return int(val)
-                except (TypeError, ValueError):
-                    pass
-    return None
-
-
 def _as_numeric(value) -> Optional[float]:
     if value is None:
         return None
@@ -104,13 +90,33 @@ def _as_string(value) -> Optional[str]:
     return str(value)
 
 
-def _failed_row_count(diag: dict) -> Optional[int]:
-    for key in ("failedRowsCount", "failed_rows_count", "failedRowCount"):
-        if key in diag and diag[key] is not None:
+def _failed_row_count(chk: dict, diag: dict) -> Optional[int]:
+    metrics = chk.get("metrics", []) or []
+    check_def = chk.get("definition", "").lower()
+    check_name = chk.get("name", "")
+    
+    is_bad_row_count = False
+    
+    for m in metrics:
+        m_str = str(m).lower()
+        if any(k in m_str for k in ("missing_count", "invalid_count", "duplicate_count", "failed_rows")):
+            is_bad_row_count = True
+            break
+
+    if not is_bad_row_count and "failed rows:" in check_def:
+        is_bad_row_count = True
+
+    if not is_bad_row_count and _CHECK_NAME_RE.match(check_name):
+        is_bad_row_count = True
+
+    if is_bad_row_count:
+        val = diag.get("value")
+        if val is not None:
             try:
-                return int(diag[key])
+                return int(val)
             except (TypeError, ValueError):
                 pass
+
     return None
 
 
@@ -124,10 +130,11 @@ def process_scan_results(
     run_id:           str,
     dag_id:           str,
     airflow_run_id:   Optional[str],
+    row_count_total:  int,
 ) -> list[Row]:
     """Elabora i risultati dello scan Soda trasformandoli in Row PySpark
     conformi allo schema della tabella Iceberg dqf_gpd_results."""
-    row_count_total = _extract_row_count(scan_checks)
+
     execution_date = scan_ts.date()
     rows: list[Row] = []
 
@@ -146,7 +153,7 @@ def process_scan_results(
         category, dimension, column_from_name = _parse_check_name(check_name)
         check_column = chk.get("column") or column_from_name
 
-        row_count_failed = _failed_row_count(diag)
+        row_count_failed = _failed_row_count(chk, diag)
         has_failed_records = (
             outcome.lower() == "fail"
             or (row_count_failed is not None and row_count_failed > 0)

@@ -23,11 +23,14 @@ def run_dataframe_soda_scan(spark: SparkSession, contract: dict, config: AppConf
         
         if config.table_limit and config.table_limit > 0:
             df = df.limit(config.table_limit)
+
+        total_rows = df.count()
+        logger.info(f"Il DataFrame contiene {total_rows} righe che verranno scansionate.")
             
         df.createOrReplaceTempView(contract["table_name"])
     except Exception as e:
         logger.error(f"Errore caricamento tabella Spark {contract['dataset']}: {e}")
-        return []
+        return [], 0
 
     logger.info(f"Esecuzione Soda Scan per la vista temporanea '{contract['table_name']}'...")
     logger.info(f"\n{'-'*30} Controlli generati {'-'*30}\n{contract['sodacl']}\n{'-'*88}")
@@ -55,4 +58,6 @@ def run_dataframe_soda_scan(spark: SparkSession, contract: dict, config: AppConf
         logger.warning("Credenziali Soda Cloud mancanti: l'esecuzione avverrà solo in locale.")
 
     scan.execute()
-    return scan.get_scan_results().get("checks", [])
+    checks = scan.get_scan_results().get("checks", [])
+
+    return checks, total_rows
