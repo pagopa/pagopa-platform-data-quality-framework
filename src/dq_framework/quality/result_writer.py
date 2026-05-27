@@ -39,6 +39,10 @@ RESULTS_SCHEMA = StructType([
     StructField("row_count_total",        LongType(),      True),
     StructField("row_count_failed",       LongType(),      True),
     StructField("has_failed_records",     BooleanType(),   False),
+    # Colonne watermark per controlli incrementali (NULL per controlli massivi)
+    StructField("watermark_column",       StringType(),    True),
+    StructField("watermark_from",         TimestampType(), True),
+    StructField("watermark_to",           TimestampType(), True),
 ])
 
 _CHECK_NAME_RE = re.compile(
@@ -121,21 +125,33 @@ def _failed_row_count(chk: dict, diag: dict) -> Optional[int]:
 
 
 def process_scan_results(
-    scan_checks:      list[dict],
-    contract_title:   str,
-    contract_version: str,
-    table_name:       str,
-    scan_ts:          datetime,
-    data_source:      str,
-    run_id:           str,
-    dag_id:           str,
-    airflow_run_id:   Optional[str],
-    row_count_total:  int,
+    scan_checks:       list[dict],
+    contract_title:    str,
+    contract_version:  str,
+    table_name:        str,
+    scan_ts:           datetime,
+    data_source:       str,
+    run_id:            str,
+    dag_id:            str,
+    airflow_run_id:    Optional[str],
+    row_count_total:   int,
+    watermark_column:  Optional[str]                    = None,
+    per_check_wm_from: Optional[dict[str, datetime]]    = None,
+    wm_to:             Optional[datetime]               = None,
 ) -> list[Row]:
     """Elabora i risultati dello scan Soda trasformandoli in Row PySpark
-    conformi allo schema della tabella Iceberg dqf_gpd_results."""
+    conformi allo schema della tabella Iceberg dqf_gpd_results.
+
+    Le colonne watermark vengono valorizzate solo per i check incrementali,
+    ossia quelli il cui `check_name` compare in `per_check_wm_from`. Per i
+    check massivi le tre colonne `watermark_column`, `watermark_from` e
+    `watermark_to` restano NULL. Cio' consente al lookup successivo di
+    distinguere correttamente "ultima run pass incrementale" da "ultima run
+    pass qualsiasi".
+    """
 
     execution_date = scan_ts.date()
+    per_check_wm_from = per_check_wm_from or {}
     rows: list[Row] = []
 
     for chk in scan_checks:
@@ -159,6 +175,10 @@ def process_scan_results(
             or (row_count_failed is not None and row_count_failed > 0)
         )
 
+        # Watermark per-check: valorizzato solo se il check era incrementale
+        check_wm_from = per_check_wm_from.get(check_name)
+        is_incremental_check = check_wm_from is not None
+
         rows.append(Row(
             run_id                 = run_id,
             airflow_run_id         = airflow_run_id,
@@ -178,6 +198,9 @@ def process_scan_results(
             row_count_total        = row_count_total,
             row_count_failed       = row_count_failed,
             has_failed_records     = bool(has_failed_records),
+            watermark_column       = watermark_column if is_incremental_check else None,
+            watermark_from         = check_wm_from,
+            watermark_to           = wm_to            if is_incremental_check else None,
         ))
 
     return rows

@@ -37,6 +37,9 @@ include = ["dq_framework*"]
 # Pytest configuration
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "integration: marca i test che richiedono una SparkSession reale e/o servizi esterni",
+]
 
 # Ruff linter/formatter configuration
 [tool.ruff]

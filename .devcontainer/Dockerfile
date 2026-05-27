@@ -17,8 +17,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # copia del sorgente e installazione in modalità editable
 # (rende il pacchetto importabile come `dq_framework.*`)
+# L'extra [dev] aggiunge pytest, pytest-cov, ruff (definiti in pyproject.toml)
+# in modo che `python -m pytest` sia disponibile out-of-the-box nel container.
 COPY . /app/
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir -e ".[dev]"
 
 ENV CONTRACTS_PATH="/app/tests/fixtures/contracts"
 ENV TABLE_LIMIT="50"

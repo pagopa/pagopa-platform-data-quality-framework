@@ -23,3 +23,16 @@ class AppConfig:
     results_write_enabled: bool = False # se False la pipeline non scrive su DB (utile in locale)
     results_table: str = "dqf_gpd_results"
     results_table_location: str | None = None  # opzionale: LOCATION usata in CREATE TABLE IF NOT EXISTS
+
+    # Controlli incrementali
+    #   Placeholder atteso nelle query SodaCL custom; quando presente in una query
+    #   il framework risolve il watermark per-check e sostituisce monoliticamente
+    #   con "<col> > TIMESTAMP '...' AND <col> <= TIMESTAMP '...'".
+    incremental_placeholder: str = "${INCREMENTAL_CONDITIONS}"
+    #   Colonna di default usata per espandere il placeholder. Override possibile
+    #   via CLI flag --watermark-column. Se None ed esiste il placeholder nel
+    #   contract: errore fail-fast.
+    default_watermark_column: str | None = "dl_event_tms"
+    #   Minuti di lookback applicati a wm_from per coprire late arrivals.
+    #   Solo per lookup automatico da Iceberg; non si applica a CLI/Airflow override.
+    incremental_lookback_minutes: int = 0
