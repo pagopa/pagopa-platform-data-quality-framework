@@ -1,0 +1,57 @@
+dataContractSpecification: 0.9.3
+id: urn:pagopa:gpd:payment-option-incremental
+info:
+  title: Payment Option Contract (Incremental DQ Sample)
+  description: |
+    Contract di esempio per verificare il flusso di Data Quality incrementale
+    per-check. Contiene 3 controlli:
+      - 2 incrementali (placeholder ${INCREMENTAL_CONDITIONS} nella WHERE)
+      - 1 massivo (nessun placeholder)
+    Il framework risolve per-check il watermark dalla tabella results,
+    sostituisce il placeholder con la clausola SQL completa
+    "dl_event_tms > TIMESTAMP '...' AND dl_event_tms <= TIMESTAMP '...'"
+    e esegue una scan Soda unica sul dataset.
+  owner: pagoPA QA-Team
+  version: 0.0.1
+
+quality:
+  type: SodaCL
+  dataset: pagopa.silver_gpd_payment_option
+  specification: |-
+    checks for silver_gpd_payment_option:
+
+      # ---- CHECK INCREMENTALE #1 ------------------------------------------
+      # Verifica che nei nuovi eventi CDC il campo after.amount sia valorizzato.
+      # Conta le righe entranti con amount NULL dopo l'ultimo watermark "pass".
+      - amount_null_incoming = 0:
+          name: fld__cmp__amount__not_null_incremental
+          amount_null_incoming query: |
+            SELECT COUNT(*)
+            FROM silver_gpd_payment_option
+            WHERE after.amount IS NULL
+              AND ${INCREMENTAL_CONDITIONS}
+
+      # ---- CHECK INCREMENTALE #2 ------------------------------------------
+      # Verifica che i nuovi eventi CDC non abbiano iuv duplicati.
+      - iuv_duplicates_incoming = 0:
+          name: ent__unq__iuv__no_duplicates_incremental
+          iuv_duplicates_incoming query: |
+            SELECT COUNT(*)
+            FROM (
+              SELECT after.iuv AS iuv, COUNT(*) AS c
+              FROM silver_gpd_payment_option
+              WHERE after.iuv IS NOT NULL
+                AND ${INCREMENTAL_CONDITIONS}
+              GROUP BY after.iuv
+              HAVING COUNT(*) > 1
+            ) dup
+
+      # ---- CHECK MASSIVO ---------------------------------------------------
+      # Verifica che storicamente non esistano amount negativi nel dataset.
+      # Nessun placeholder: viene eseguito su tutta la tabella ad ogni run.
+      - amount_negative_total = 0:
+          name: fld__vld__amount__non_negative
+          amount_negative_total query: |
+            SELECT COUNT(*)
+            FROM silver_gpd_payment_option
+            WHERE after.amount < 0
