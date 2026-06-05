@@ -7,8 +7,8 @@ TEST_CONFIG = AppConfig(
     default_repository="carlomanco-qty/qty-data-contracts",
     default_ref="main",
     soda_host="cloud.soda.io",
-    data_source="pagopa_test",
-    table_limit=50,
+    data_source="pagopa_qa",
+    table_limit=1000,
     results_database="pagopa_dev",
     results_write_enabled=True,
     # se la tabella esiste già in metastore, lasciare None: la CREATE TABLE IF NOT EXISTS sarà

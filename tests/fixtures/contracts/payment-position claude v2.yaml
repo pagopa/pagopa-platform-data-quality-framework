@@ -518,17 +518,6 @@ quality:
   specification: |-
     checks for payment-position:
       - failed rows:
-          name: fld__cmp__after_fiscal_code__not_null
-          fail query: |
-            SELECT *
-            FROM pagopa.silver_gpd_payment_position
-            WHERE op IN ('c', 'r', 'u')
-              AND after.fiscal_code IS NULL
-
-      # ============================================================
-      # Consistenza Cross-entity
-      # ============================================================
-      - failed rows:
           name: xref__cns__gpd_payment_option__fk_payment_position_id
           fail query: |
             SELECT spo.dl_id, spo.after.payment_position_id
@@ -540,4 +529,23 @@ quality:
                 WHERE spp.op IN ('c', 'r', 'u')
                   AND spp.after.id = spo.after.payment_position_id
               )
-      
+      - failed rows:
+          name: xref__cns__gpd_payment_position__fiscal_code_coherence
+          fail query: |
+            SELECT spp.dl_id, spp.after.fiscal_code, spo.after.organization_fiscal_code
+            FROM pagopa.silver_gpd_payment_position spp
+            JOIN pagopa.silver_gpd_payment_option spo
+              ON spo.after.payment_position_id = spp.after.id
+            WHERE spp.op IN ('c', 'r', 'u')
+              AND spo.op IN ('c', 'r', 'u')
+              AND spp.after.fiscal_code = spo.after.organization_fiscal_code
+      - failed rows:
+          name: xref__cns__gpd_payment_position__max_due_date_not_exceeded
+          fail query: |
+            SELECT spp.dl_id, spp.after.max_due_date, spo.after.due_date
+            FROM pagopa.silver_gpd_payment_position spp
+            JOIN pagopa.silver_gpd_payment_option spo
+              ON spo.after.payment_position_id = spp.after.id
+            WHERE spp.op IN ('c', 'r', 'u')
+              AND spo.op IN ('c', 'r', 'u')
+              AND spo.after.due_date > spp.after.max_due_date

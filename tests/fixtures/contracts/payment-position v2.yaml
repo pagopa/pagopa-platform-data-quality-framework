@@ -516,14 +516,228 @@ quality:
   xref-dataset:
     - silver_gpd_payment_option
   specification: |-
+  specification: |-
     checks for payment-position:
-      - failed rows:
+
+      # ============================================================
+      # Entity Level
+      # ============================================================
+      - row_count > 0:
+          name: ent__cmp__dataset__is_not_empty
+
+      # ============================================================
+      # Completezza Campi Root
+      # ============================================================
+      - missing_count(op) = 0:
+          name: fld__cmp__op__not_null
+      - missing_count(ts_ms) = 0:
+          name: fld__cmp__ts_ms__not_null
+      - missing_count(ts_ns) = 0:
+          name: fld__cmp__ts_ns__not_null
+      - missing_count(ts_us) = 0:
+          name: fld__cmp__ts_us__not_null
+
+      # ============================================================
+      # Freschezza
+      # ============================================================
+      - freshness(dl_event_tms) < 1d:
+          name: fld__tim__dl_event_tms__freshness_1d
+
+      # ============================================================
+      # Completezza Campi After (op IN 'c', 'r', 'u')
+      # Ottimizzati con le funzioni native Soda + filtri pushdown
+      # ============================================================
+      - missing_count(after.id) = 0:
+          name: fld__cmp__after_id__not_null
+          filter: op IN ('c', 'r', 'u')
+      - missing_count(after.fiscal_code) = 0:
           name: fld__cmp__after_fiscal_code__not_null
+          filter: op IN ('c', 'r', 'u')
+      - missing_count(after.min_due_date) = 0:
+          name: fld__cmp__after_min_due_date__not_null
+          filter: op IN ('c', 'r', 'u')
+      - missing_count(after.max_due_date) = 0:
+          name: fld__cmp__after_max_due_date__not_null
+          filter: op IN ('c', 'r', 'u')
+      - missing_count(after.organization_fiscal_code) = 0:
+          name: fld__cmp__after_organization_fiscal_code__not_null
+          filter: op IN ('c', 'r', 'u')
+      - missing_count(after.company_name) = 0:
+          name: fld__cmp__after_company_name__not_null
+          filter: op IN ('c', 'r', 'u')
+      - missing_count(after.status) = 0:
+          name: fld__cmp__after_status__not_null
+          filter: op IN ('c', 'r', 'u')
+      - missing_count(after.type) = 0:
+          name: fld__cmp__after_type__not_null
+          filter: op IN ('c', 'r', 'u')
+      - missing_count(after.switch_to_expired) = 0:
+          name: fld__cmp__after_switch_to_expired__not_null
+          filter: op IN ('c', 'r', 'u')
+      - missing_count(after.last_updated_date) = 0:
+          name: fld__cmp__after_last_updated_date__not_null
+          filter: op IN ('c', 'r', 'u')
+      - missing_count(after.inserted_date) = 0:
+          name: fld__cmp__after_inserted_date__not_null
+          filter: op IN ('c', 'r', 'u')
+
+      # ============================================================
+      # Validita' - Enum
+      # Ottimizzati con le check list native Soda
+      # ============================================================
+      - invalid_count(after.status) = 0:
+          name: fld__vld__after_status__enum
+          valid values: ['DRAFT', 'PUBLISHED', 'VALID', 'PAID', 'EXPIRED', 'INVALID', 'REPORTED', 'PARTIALLY_PAID']
+          filter: op IN ('c', 'r', 'u')
+      - invalid_count(after.type) = 0:
+          name: fld__vld__after_type__enum
+          valid values: ['F', 'G']
+          filter: op IN ('c', 'r', 'u')
+      - invalid_count(after.service_type) = 0:
+          name: fld__vld__after_service_type__enum
+          valid values: ['GPD', 'ACA', 'WISP']
+          filter: op IN ('c', 'r', 'u')
+
+      # ============================================================
+      # Validita' - Pattern CF / P.IVA
+      # ============================================================
+      - failed rows:
+          name: fld__vld__after_organization_fiscal_code__piva_format
           fail query: |
-            SELECT *
+            SELECT dl_id, after.organization_fiscal_code
             FROM pagopa.silver_gpd_payment_position
             WHERE op IN ('c', 'r', 'u')
-              AND after.fiscal_code IS NULL
+              AND after.organization_fiscal_code IS NOT NULL
+              AND NOT after.organization_fiscal_code RLIKE '^[0-9]{11}$'
+              AND NOT after.organization_fiscal_code RLIKE '^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$'
+
+      # ============================================================
+      # Validita' - Lunghezza Timestamp (us = 16 cifre)
+      # ============================================================
+      - failed rows:
+          name: fld__vld__after_payment_date__timestamp_length_16
+          fail query: |
+            SELECT dl_id, after.payment_date
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u') 
+              AND after.payment_date IS NOT NULL 
+              AND LENGTH(CAST(after.payment_date AS STRING)) < 16
+
+      # ============================================================
+      # Validita' - Soglia Date (max 30 anni nel futuro)
+      # ============================================================
+      - failed rows:
+          name: fld__vld__after_max_due_date__date_max_30y
+          fail query: |
+            SELECT dl_id, after.max_due_date
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.max_due_date IS NOT NULL
+              AND from_unixtime(after.max_due_date / 1000000) > add_months(current_timestamp(), 360)
+      - failed rows:
+          name: fld__vld__after_min_due_date__date_max_30y
+          fail query: |
+            SELECT dl_id, after.min_due_date
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.min_due_date IS NOT NULL
+              AND from_unixtime(after.min_due_date / 1000000) > add_months(current_timestamp(), 360)
+      - failed rows:
+          name: fld__vld__after_validity_date__date_max_30y
+          fail query: |
+            SELECT dl_id, after.validity_date
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.validity_date IS NOT NULL
+              AND from_unixtime(after.validity_date / 1000000) > add_months(current_timestamp(), 360)
+
+      # ============================================================
+      # Consistenza Intra-entity
+      # ============================================================
+      - failed rows:
+          name: ent__cns__delete_op__before_fields_cleared
+          fail query: |
+            SELECT dl_id, op, before.id, before.iupd, before.fiscal_code
+            FROM pagopa.silver_gpd_payment_position
+            WHERE
+              (op = 'd' AND before.id IS NULL)
+              OR
+              (op = 'd' AND (
+                    before.iupd != ''
+                    OR before.fiscal_code != ''
+                    OR before.max_due_date != 0
+                    OR before.min_due_date != 0
+                    OR before.organization_fiscal_code != ''
+                    OR before.company_name != ''
+                    OR before.type != ''
+                    OR before.switch_to_expired != false
+                    OR before.last_updated_date != 0
+                    OR before.inserted_date != 0
+            ))
+      - failed rows:
+          name: ent__cns__cru_op__after_id_present
+          fail query: |
+            SELECT dl_id, op, after.id
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u') AND after.id IS NULL
+      - failed rows:
+          name: ent__unq__iupd_organization_fiscal_code__no_duplicates
+          fail query: |
+            SELECT t1.dl_id, t1.after.iupd, t1.after.organization_fiscal_code
+            FROM pagopa.silver_gpd_payment_position t1
+            INNER JOIN (
+              SELECT after.iupd, after.organization_fiscal_code
+              FROM pagopa.silver_gpd_payment_position
+              WHERE op IN ('c', 'r', 'u')
+              GROUP BY after.iupd, after.organization_fiscal_code
+              HAVING COUNT(*) > 1
+            ) t2 ON t1.after.iupd = t2.iupd AND t1.after.organization_fiscal_code = t2.organization_fiscal_code
+            WHERE t1.op IN ('c', 'r', 'u')
+      - failed rows:
+          name: ent__cns__payment_date_status__conditional_status
+          fail query: |
+            SELECT dl_id, after.payment_date, after.status
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.payment_date IS NOT NULL
+              AND after.status NOT IN ('PAID', 'REPORTED', 'PARTIALLY_PAID')
+      - failed rows:
+          name: ent__cns__publish_date_status__draft_without_publish_date
+          fail query: |
+            SELECT dl_id, after.publish_date, after.status
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.publish_date IS NULL
+              AND after.status != 'DRAFT'
+      - failed rows:
+          name: ent__cns__switch_to_expired_max_due_date__not_future
+          fail query: |
+            SELECT dl_id, after.switch_to_expired, after.max_due_date
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.switch_to_expired = true
+              AND from_unixtime(after.max_due_date / 1000000) > current_timestamp()
+      - failed rows:
+          name: ent__cns__delete_op__after_is_null
+          fail query: |
+            SELECT dl_id, op, after.id
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op = 'd'
+              AND after.id IS NOT NULL
+      - failed rows:
+          name: ent__cns__cru_op__before_is_null
+          fail query: |
+            SELECT dl_id, op, before.id
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND before.id IS NOT NULL
+      - failed rows:
+          name: ent__cns__fiscal_code__creditore_debitore_mismatch
+          fail query: |
+            SELECT dl_id, after.fiscal_code, after.organization_fiscal_code
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.fiscal_code = after.organization_fiscal_code
 
       # ============================================================
       # Consistenza Cross-entity
@@ -540,4 +754,23 @@ quality:
                 WHERE spp.op IN ('c', 'r', 'u')
                   AND spp.after.id = spo.after.payment_position_id
               )
-      
+      - failed rows:
+          name: xref__cns__gpd_payment_position__fiscal_code_coherence
+          fail query: |
+            SELECT spp.dl_id, spp.after.fiscal_code, spo.after.organization_fiscal_code
+            FROM pagopa.silver_gpd_payment_position spp
+            JOIN pagopa.silver_gpd_payment_option spo
+              ON spo.after.payment_position_id = spp.after.id
+            WHERE spp.op IN ('c', 'r', 'u')
+              AND spo.op IN ('c', 'r', 'u')
+              AND spp.after.fiscal_code = spo.after.organization_fiscal_code
+      - failed rows:
+          name: xref__cns__gpd_payment_position__max_due_date_not_exceeded
+          fail query: |
+            SELECT spp.dl_id, spp.after.max_due_date, spo.after.due_date
+            FROM pagopa.silver_gpd_payment_position spp
+            JOIN pagopa.silver_gpd_payment_option spo
+              ON spo.after.payment_position_id = spp.after.id
+            WHERE spp.op IN ('c', 'r', 'u')
+              AND spo.op IN ('c', 'r', 'u')
+              AND spo.after.due_date > spp.after.max_due_date

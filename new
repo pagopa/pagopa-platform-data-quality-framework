@@ -1,0 +1,195 @@
+2026-05-29 14:23:18 | INFO     | log | [14:23:18] Soda Core 3.5.6
+2026-05-29 14:23:18 | WARNING  | soda_executor | Credenziali Soda Cloud mancanti: l'esecuzione avverrà solo in locale.
+2026-05-29 14:23:54 | INFO     | log | [14:23:54] Scan summary:                 
+2026-05-29 14:23:54 | INFO     | log | [14:23:54] 24/37 checks PASSED: 
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]     silver_gpd_payment_position in pagopa_qa
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       ent__cmp__dataset__is_not_empty [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__vld__after_payment_date__timestamp_length_16 [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__vld__after_max_due_date__date_max_30y [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__vld__after_min_due_date__date_max_30y [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__vld__after_validity_date__date_max_30y [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       ent__cns__delete_op__before_fields_cleared [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       ent__cns__cru_op__after_id_present [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       ent__unq__iupd_organization_fiscal_code__no_duplicates [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       ent__cns__payment_date_status__conditional_status [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       ent__cns__switch_to_expired_max_due_date__not_future [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       ent__cns__delete_op__after_is_null [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       ent__cns__cru_op__before_is_null [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       ent__cns__fiscal_code__creditore_debitore_mismatch [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       xref__cns__gpd_payment_position__fiscal_code_coherence [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       xref__cns__gpd_payment_position__max_due_date_not_exceeded [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__cmp__op__not_null [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__cmp__ts_ms__not_null [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__cmp__ts_ns__not_null [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__cmp__ts_us__not_null [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__cmp__after_id__not_null [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__cmp__after_organization_fiscal_code__not_null [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__cmp__after_status__not_null [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__cmp__after_type__not_null [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__vld__after_service_type__enum [PASSED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54] 13/37 checks FAILED: 
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]     silver_gpd_payment_position in pagopa_qa
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__vld__after_organization_fiscal_code__piva_format [FAILED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]         value: 1
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       ent__cns__publish_date_status__draft_without_publish_date [FAILED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]         value: 1
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       xref__cns__gpd_payment_option__fk_payment_position_id [FAILED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]         value: 3
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__tim__dl_event_tms__freshness_1d [FAILED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]         max_column_timestamp: 2024-01-01 10:00:00
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]         max_column_timestamp_utc: 2024-01-01 10:00:00+00:00
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]         now_variable_name: NOW
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]         now_timestamp: 2026-05-29T14:23:18.063721+00:00
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]         now_timestamp_utc: 2026-05-29 14:23:18.063721+00:00
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]         freshness: 879 days, 4:23:18.063721
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__cmp__after_fiscal_code__not_null [FAILED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]         check_value: 1
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__cmp__after_min_due_date__not_null [FAILED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]         check_value: 1
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__cmp__after_max_due_date__not_null [FAILED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]         check_value: 1
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__cmp__after_company_name__not_null [FAILED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]         check_value: 1
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__vld__after_status__enum [FAILED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]         check_value: 1
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__vld__after_type__enum [FAILED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]         check_value: 1
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__cmp__after_switch_to_expired__not_null [FAILED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]         check_value: 1
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__cmp__after_last_updated_date__not_null [FAILED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]         check_value: 1
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]       fld__cmp__after_inserted_date__not_null [FAILED]
+2026-05-29 14:23:54 | INFO     | log | [14:23:54]         check_value: 1
+2026-05-29 14:23:54 | INFO     | log | [14:23:54] Oops! 13 failures. 0 warnings. 0 errors. 24 pass.
+2026-05-29 14:23:54 | INFO     | engine | Riepilogo contract [Payment Position Contract] - Totale: 37 | PASS: 24 | WARN: 0 | FAIL: 13 | ERRORS: 0
+2026-05-29 14:23:54 | WARNING  | engine | [FAIL] Check: fld__vld__after_organization_fiscal_code__piva_format | Valore Rilevato: 1
+2026-05-29 14:23:54 | WARNING  | engine | [FAIL] Check: ent__cns__publish_date_status__draft_without_publish_date | Valore Rilevato: 1
+2026-05-29 14:23:54 | WARNING  | engine | [FAIL] Check: xref__cns__gpd_payment_option__fk_payment_position_id | Valore Rilevato: 3
+2026-05-29 14:23:54 | WARNING  | engine | [FAIL] Check: fld__tim__dl_event_tms__freshness_1d | Valore Rilevato: 75961398064
+2026-05-29 14:23:54 | WARNING  | engine | [FAIL] Check: fld__cmp__after_fiscal_code__not_null | Valore Rilevato: 1
+2026-05-29 14:23:54 | WARNING  | engine | [FAIL] Check: fld__cmp__after_min_due_date__not_null | Valore Rilevato: 1
+2026-05-29 14:23:54 | WARNING  | engine | [FAIL] Check: fld__cmp__after_max_due_date__not_null | Valore Rilevato: 1
+2026-05-29 14:23:54 | WARNING  | engine | [FAIL] Check: fld__cmp__after_company_name__not_null | Valore Rilevato: 1
+2026-05-29 14:23:54 | WARNING  | engine | [FAIL] Check: fld__vld__after_status__enum | Valore Rilevato: 1
+2026-05-29 14:23:54 | WARNING  | engine | [FAIL] Check: fld__vld__after_type__enum | Valore Rilevato: 1
+2026-05-29 14:23:54 | WARNING  | engine | [FAIL] Check: fld__cmp__after_switch_to_expired__not_null | Valore Rilevato: 1
+2026-05-29 14:23:54 | WARNING  | engine | [FAIL] Check: fld__cmp__after_last_updated_date__not_null | Valore Rilevato: 1
+2026-05-29 14:23:54 | WARNING  | engine | [FAIL] Check: fld__cmp__after_inserted_date__not_null | Valore Rilevato: 1
+2026-05-29 14:23:54 | INFO     | engine | ================================================================================
+2026-05-29 14:23:54 | INFO     | engine | RISULTATI FINALI PIPELINE DATA QUALITY
+2026-05-29 14:23:54 | INFO     | engine | ================================================================================
+2026-05-29 14:23:56 | INFO     | engine | [PASS] ent__cmp__dataset__is_not_empty
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=1.0 string=None | rows_total=1 rows_failed=1
+2026-05-29 14:23:56 | INFO     | engine | [FAIL] fld__vld__after_organization_fiscal_code__piva_format
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=1.0 string=None | rows_total=1 rows_failed=1
+2026-05-29 14:23:56 | INFO     | engine | [PASS] fld__vld__after_payment_date__timestamp_length_16
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [PASS] fld__vld__after_max_due_date__date_max_30y
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [PASS] fld__vld__after_min_due_date__date_max_30y
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [PASS] fld__vld__after_validity_date__date_max_30y
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [PASS] ent__cns__delete_op__before_fields_cleared
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [PASS] ent__cns__cru_op__after_id_present
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [PASS] ent__unq__iupd_organization_fiscal_code__no_duplicates
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [PASS] ent__cns__payment_date_status__conditional_status
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [FAIL] ent__cns__publish_date_status__draft_without_publish_date
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=1.0 string=None | rows_total=1 rows_failed=1
+2026-05-29 14:23:56 | INFO     | engine | [PASS] ent__cns__switch_to_expired_max_due_date__not_future
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [PASS] ent__cns__delete_op__after_is_null
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [PASS] ent__cns__cru_op__before_is_null
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [PASS] ent__cns__fiscal_code__creditore_debitore_mismatch
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [FAIL] xref__cns__gpd_payment_option__fk_payment_position_id
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=3.0 string=None | rows_total=1 rows_failed=3
+2026-05-29 14:23:56 | INFO     | engine | [PASS] xref__cns__gpd_payment_position__fiscal_code_coherence
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [PASS] xref__cns__gpd_payment_position__max_due_date_not_exceeded
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [PASS] fld__cmp__op__not_null
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [PASS] fld__cmp__ts_ms__not_null
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [PASS] fld__cmp__ts_ns__not_null
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [PASS] fld__cmp__ts_us__not_null
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [FAIL] fld__tim__dl_event_tms__freshness_1d
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=75961398064.0 string=None | rows_total=1 rows_failed=75961398064
+2026-05-29 14:23:56 | INFO     | engine | [PASS] fld__cmp__after_id__not_null
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [FAIL] fld__cmp__after_fiscal_code__not_null
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=1.0 string=None | rows_total=1 rows_failed=1
+2026-05-29 14:23:56 | INFO     | engine | [FAIL] fld__cmp__after_min_due_date__not_null
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=1.0 string=None | rows_total=1 rows_failed=1
+2026-05-29 14:23:56 | INFO     | engine | [FAIL] fld__cmp__after_max_due_date__not_null
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=1.0 string=None | rows_total=1 rows_failed=1
+2026-05-29 14:23:56 | INFO     | engine | [PASS] fld__cmp__after_organization_fiscal_code__not_null
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [FAIL] fld__cmp__after_company_name__not_null
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=1.0 string=None | rows_total=1 rows_failed=1
+2026-05-29 14:23:56 | INFO     | engine | [PASS] fld__cmp__after_status__not_null
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [FAIL] fld__vld__after_status__enum
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=1.0 string=None | rows_total=1 rows_failed=1
+2026-05-29 14:23:56 | INFO     | engine | [PASS] fld__cmp__after_type__not_null
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | [FAIL] fld__vld__after_type__enum
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=1.0 string=None | rows_total=1 rows_failed=1
+2026-05-29 14:23:56 | INFO     | engine | [FAIL] fld__cmp__after_switch_to_expired__not_null
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=1.0 string=None | rows_total=1 rows_failed=1
+2026-05-29 14:23:56 | INFO     | engine | [FAIL] fld__cmp__after_last_updated_date__not_null
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=1.0 string=None | rows_total=1 rows_failed=1
+2026-05-29 14:23:56 | INFO     | engine | [FAIL] fld__cmp__after_inserted_date__not_null
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=1.0 string=None | rows_total=1 rows_failed=1
+2026-05-29 14:23:56 | INFO     | engine | [PASS] fld__vld__after_service_type__enum
+2026-05-29 14:23:56 | INFO     | engine |     - Dataset  : silver_gpd_payment_position
+2026-05-29 14:23:56 | INFO     | engine |     - Misura   : numeric=0.0 string=None | rows_total=1 rows_failed=0
+2026-05-29 14:23:56 | INFO     | engine | ================================================================================
+2026-05-29 14:23:56 | INFO     | engine | results_write_enabled=False (env=dev): scrittura su DB saltata per tabella results.
+2026-05-29 14:23:56 | INFO     | engine | Pipeline completata. Chiusura sessione Spark.
+2026-05-29 14:23:57 | INFO     | clientserver | Closing down clientserver connection

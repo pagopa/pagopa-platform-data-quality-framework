@@ -515,13 +515,233 @@ quality:
   dataset: pagopa.silver_gpd_payment_position
   specification: |-
     checks for payment-position:
+
+      # ============================================================
+      # Entity Level
+      # ============================================================
       - row_count > 0
+
+      # ============================================================
+      # Completezza Campi Root
+      # ============================================================
       - missing_count(op) = 0
       - missing_count(ts_ms) = 0
       - missing_count(ts_ns) = 0
       - missing_count(ts_us) = 0
+
+      # ============================================================
+      # Freschezza
+      # ============================================================
       - freshness(dl_event_tms) < 1d:
           name: Data is fresh
+
+      # ============================================================
+      # Completezza Campi After (op IN 'c', 'r', 'u')
+      # ============================================================
+      - count_missing_after_id = 0:
+          name: fld__cmp__after_id__not_null
+          count_missing_after_id query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.id IS NULL
+      - count_missing_after_fiscal_code = 0:
+          name: fld__cmp__after_fiscal_code__not_null
+          count_missing_after_fiscal_code query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.fiscal_code IS NULL
+      - count_missing_after_min_due_date = 0:
+          name: fld__cmp__after_min_due_date__not_null
+          count_missing_after_min_due_date query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.min_due_date IS NULL
+      - count_missing_after_max_due_date = 0:
+          name: fld__cmp__after_max_due_date__not_null
+          count_missing_after_max_due_date query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.max_due_date IS NULL
+      - count_missing_after_organization_fiscal_code = 0:
+          name: fld__cmp__after_organization_fiscal_code__not_null
+          count_missing_after_organization_fiscal_code query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.organization_fiscal_code IS NULL
+      - count_missing_after_company_name = 0:
+          name: fld__cmp__after_company_name__not_null
+          count_missing_after_company_name query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.company_name IS NULL
+      - count_missing_after_status = 0:
+          name: fld__cmp__after_status__not_null
+          count_missing_after_status query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.status IS NULL
+      - count_missing_after_type = 0:
+          name: fld__cmp__after_type__not_null
+          count_missing_after_type query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.type IS NULL
+      - count_missing_after_switch_to_expired = 0:
+          name: fld__cmp__after_switch_to_expired__not_null
+          count_missing_after_switch_to_expired query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.switch_to_expired IS NULL
+      - count_missing_after_last_updated_date = 0:
+          name: fld__cmp__after_last_updated_date__not_null
+          count_missing_after_last_updated_date query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.last_updated_date IS NULL
+      - count_missing_after_inserted_date = 0:
+          name: fld__cmp__after_inserted_date__not_null
+          count_missing_after_inserted_date query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.inserted_date IS NULL
+
+      # ============================================================
+      # Validita' - Enum
+      # ============================================================
+      - count_invalid_after_status = 0:
+          name: fld__vld__after_status__enum
+          count_invalid_after_status query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.status NOT IN ('DRAFT', 'PUBLISHED', 'VALID', 'PAID', 'EXPIRED', 'INVALID', 'REPORTED', 'PARTIALLY_PAID')
+      - count_invalid_after_type = 0:
+          name: fld__vld__after_type__enum
+          count_invalid_after_type query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.type NOT IN ('F', 'G')
+      - count_invalid_after_service_type = 0:
+          name: fld__vld__after_service_type__enum
+          count_invalid_after_service_type query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.service_type IS NOT NULL
+              AND after.service_type NOT IN ('GPD', 'ACA', 'WISP')
+
+      # ============================================================
+      # Validita' - Pattern CF / P.IVA (after.organization_fiscal_code)
+      # ============================================================
+      - count_invalid_org_fiscal_code_piva_format = 0:
+          name: fld__vld__after_organization_fiscal_code__piva_format
+          count_invalid_org_fiscal_code_piva_format query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.organization_fiscal_code IS NOT NULL
+              AND NOT after.organization_fiscal_code RLIKE '^[0-9]{11}$'
+              AND NOT after.organization_fiscal_code RLIKE '^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$'
+      - count_invalid_org_fiscal_code_cf_format = 0:
+          name: fld__vld__after_organization_fiscal_code__cf_format
+          count_invalid_org_fiscal_code_cf_format query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.organization_fiscal_code IS NOT NULL
+              AND NOT after.organization_fiscal_code RLIKE '^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$'
+              AND NOT after.organization_fiscal_code RLIKE '^[0-9]{11}$'
+
+      # ============================================================
+      # Validita' - Lunghezza Timestamp (us = 16 cifre)
+      # DISABLED: known upstream issue, tracking in PIDM-1751 and DLTE-828, ETA 2026-Q2
+      # ============================================================
+      # - count_timestamp_length_after_max_due_date = 0:
+      #     name: fld__vld__after_max_due_date__timestamp_length_16
+      #     count_timestamp_length_after_max_due_date query: |
+      #       SELECT COUNT(*)
+      #       FROM pagopa.silver_gpd_payment_position
+      #       WHERE op IN ('c', 'r', 'u') AND LENGTH(CAST(after.max_due_date AS STRING)) < 16
+      # - count_timestamp_length_after_min_due_date = 0:
+      #     name: fld__vld__after_min_due_date__timestamp_length_16
+      #     count_timestamp_length_after_min_due_date query: |
+      #       SELECT COUNT(*)
+      #       FROM pagopa.silver_gpd_payment_position
+      #       WHERE op IN ('c', 'r', 'u') AND LENGTH(CAST(after.min_due_date AS STRING)) < 16
+      # - count_timestamp_length_after_publish_date = 0:
+      #     name: fld__vld__after_publish_date__timestamp_length_16
+      #     count_timestamp_length_after_publish_date query: |
+      #       SELECT COUNT(*)
+      #       FROM pagopa.silver_gpd_payment_position
+      #       WHERE op IN ('c', 'r', 'u') AND after.publish_date IS NOT NULL AND LENGTH(CAST(after.publish_date AS STRING)) < 16
+      # - count_timestamp_length_after_validity_date = 0:
+      #     name: fld__vld__after_validity_date__timestamp_length_16
+      #     count_timestamp_length_after_validity_date query: |
+      #       SELECT COUNT(*)
+      #       FROM pagopa.silver_gpd_payment_position
+      #       WHERE op IN ('c', 'r', 'u') AND after.validity_date IS NOT NULL AND LENGTH(CAST(after.validity_date AS STRING)) < 16
+      - unix_timestamp_microseconds_length_payment_date = 0:
+          name: fld__vld__after_payment_date__timestamp_length_16
+          unix_timestamp_microseconds_length_payment_date query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u') AND after.payment_date IS NOT NULL AND LENGTH(CAST(after.payment_date AS STRING)) < 16
+      # - count_timestamp_length_after_last_updated_date = 0:
+      #     name: fld__vld__after_last_updated_date__timestamp_length_16
+      #     count_timestamp_length_after_last_updated_date query: |
+      #       SELECT COUNT(*)
+      #       FROM pagopa.silver_gpd_payment_position
+      #       WHERE op IN ('c', 'r', 'u') AND LENGTH(CAST(after.last_updated_date AS STRING)) < 16
+      # - count_timestamp_length_after_inserted_date = 0:
+      #     name: fld__vld__after_inserted_date__timestamp_length_16
+      #     count_timestamp_length_after_inserted_date query: |
+      #       SELECT COUNT(*)
+      #       FROM pagopa.silver_gpd_payment_position
+      #       WHERE op IN ('c', 'r', 'u') AND LENGTH(CAST(after.inserted_date AS STRING)) < 16
+
+      # ============================================================
+      # Validita' - Soglia Date (max 30 anni nel futuro)
+      # ============================================================
+      - count_max_due_date_over_30y = 0:
+          name: fld__vld__after_max_due_date__date_max_30y
+          count_max_due_date_over_30y query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.max_due_date IS NOT NULL
+              AND from_unixtime(after.max_due_date / 1000000) > add_months(current_timestamp(), 360)
+      - count_min_due_date_over_30y = 0:
+          name: fld__vld__after_min_due_date__date_max_30y
+          count_min_due_date_over_30y query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.min_due_date IS NOT NULL
+              AND from_unixtime(after.min_due_date / 1000000) > add_months(current_timestamp(), 360)
+      - count_validity_date_over_30y = 0:
+          name: fld__vld__after_validity_date__date_max_30y
+          count_validity_date_over_30y query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.validity_date IS NOT NULL
+              AND from_unixtime(after.validity_date / 1000000) > add_months(current_timestamp(), 360)
+
+      # ============================================================
+      # Consistenza Intra-entity
+      # ============================================================
       - count_before_delete = 0:
           name: Validazione before per le operazioni di delete
           count_before_delete query: |
@@ -548,51 +768,95 @@ quality:
             SELECT COUNT(*)
             FROM pagopa.silver_gpd_payment_position
             WHERE op IN ('c', 'r', 'u') AND after.id IS NULL
-      # DISABLED: known upstream issue, tracking in PIDM-1751 and DLTE-828, ETA 2026-Q2
-      # - unix_timestamp_microseconds_length_max_due_date = 0:
-      #     name: Validazione lunghezza Unix timestamp in microsecondi max_due_date
-      #     unix_timestamp_microseconds_length_max_due_date query: |
-      #       SELECT COUNT(*)
-      #       FROM pagopa.silver_gpd_payment_position
-      #       WHERE op IN ('c', 'r', 'u') AND LENGTH(CAST(after.max_due_date AS STRING)) < 16
-      # DISABLED: known upstream issue, tracking in PIDM-1751 and DLTE-828, ETA 2026-Q2
-      # - unix_timestamp_microseconds_length_min_due_date = 0:
-      #     name: Validazione lunghezza Unix timestamp in microsecondi min_due_date
-      #     unix_timestamp_microseconds_length_min_due_date query: |
-      #       SELECT COUNT(*)
-      #       FROM pagopa.silver_gpd_payment_position
-      #       WHERE op IN ('c', 'r', 'u') AND LENGTH(CAST(after.min_due_date AS STRING)) < 16
-      # DISABLED: known upstream issue, tracking in PIDM-1751 and DLTE-828, ETA 2026-Q2
-      # - unix_timestamp_microseconds_length_publish_date = 0:
-      #     name: Validazione lunghezza Unix timestamp in microsecondi publish_date
-      #     unix_timestamp_microseconds_length_publish_date query: |
-      #       SELECT COUNT(*)
-      #       FROM pagopa.silver_gpd_payment_position
-      #       WHERE op IN ('c', 'r', 'u') AND after.publish_date IS NOT NULL AND LENGTH(CAST(after.publish_date AS STRING)) < 16
-      # DISABLED: known upstream issue, tracking in PIDM-1751 and DLTE-828, ETA 2026-Q2
-      # - unix_timestamp_microseconds_length_validity_date = 0:
-      #     name: Validazione lunghezza Unix timestamp in microsecondi validity_date
-      #     unix_timestamp_microseconds_length_validity_date query: |
-      #       SELECT COUNT(*)
-      #       FROM pagopa.silver_gpd_payment_position
-      #       WHERE op IN ('c', 'r', 'u') AND after.validity_date IS NOT NULL AND LENGTH(CAST(after.validity_date AS STRING)) < 16
-      - unix_timestamp_microseconds_length_payment_date = 0:
-          name: Validazione lunghezza Unix timestamp in microsecondi payment_date
-          unix_timestamp_microseconds_length_payment_date query: |
+      - count_duplicate_iupd_org_fiscal_code = 0:
+          name: ent__unq__iupd_organization_fiscal_code__no_duplicates
+          count_duplicate_iupd_org_fiscal_code query: |
+            SELECT COUNT(*)
+            FROM (
+              SELECT after.iupd, after.organization_fiscal_code
+              FROM pagopa.silver_gpd_payment_position
+              WHERE op IN ('c', 'r', 'u')
+              GROUP BY after.iupd, after.organization_fiscal_code
+              HAVING COUNT(*) > 1
+            ) t
+      - count_invalid_status_when_payment_date = 0:
+          name: ent__cns__payment_date_status__conditional_status
+          count_invalid_status_when_payment_date query: |
             SELECT COUNT(*)
             FROM pagopa.silver_gpd_payment_position
-            WHERE op IN ('c', 'r', 'u') AND after.payment_date IS NOT NULL AND LENGTH(CAST(after.payment_date AS STRING)) < 16
-      # DISABLED: known upstream issue, tracking in PIDM-1751 and DLTE-828, ETA 2026-Q2
-      # - unix_timestamp_microseconds_length_last_updated_date = 0:
-      #     name: Validazione lunghezza Unix timestamp in microsecondi last_updated_date
-      #     unix_timestamp_microseconds_length_last_updated_date query: |
-      #       SELECT COUNT(*)
-      #       FROM pagopa.silver_gpd_payment_position
-      #       WHERE op IN ('c', 'r', 'u') AND LENGTH(CAST(after.last_updated_date AS STRING)) < 16
-      # DISABLED: known upstream issue, tracking in PIDM-1751 and DLTE-828, ETA 2026-Q2
-      # - unix_timestamp_microseconds_length_inserted_date = 0:
-      #     name: Validazione lunghezza Unix timestamp in microsecondi inserted_date
-      #     unix_timestamp_microseconds_length_inserted_date query: |
-      #       SELECT COUNT(*)
-      #       FROM pagopa.silver_gpd_payment_position
-      #       WHERE op IN ('c', 'r', 'u') AND LENGTH(CAST(after.inserted_date AS STRING)) < 16
+            WHERE op IN ('c', 'r', 'u')
+              AND after.payment_date IS NOT NULL
+              AND after.status NOT IN ('PAID', 'REPORTED', 'PARTIALLY_PAID')
+      - count_invalid_status_without_publish_date = 0:
+          name: ent__cns__publish_date_status__draft_without_publish_date
+          count_invalid_status_without_publish_date query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.publish_date IS NULL
+              AND after.status != 'DRAFT'
+      - count_max_due_date_future_when_switch_to_expired = 0:
+          name: ent__cns__switch_to_expired_max_due_date__not_future
+          count_max_due_date_future_when_switch_to_expired query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.switch_to_expired = true
+              AND from_unixtime(after.max_due_date / 1000000) > current_timestamp()
+      - count_after_present_on_delete = 0:
+          name: ent__cns__op_after__after_present_for_cru
+          count_after_present_on_delete query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op = 'd'
+              AND after.id IS NOT NULL
+      - count_before_present_for_cru = 0:
+          name: ent__cns__op_before__before_present_for_delete
+          count_before_present_for_cru query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND before.id IS NOT NULL
+      - count_fiscal_code_equals_org_fiscal_code = 0:
+          name: ent__cns__fiscal_code__creditore_debitore_mismatch
+          count_fiscal_code_equals_org_fiscal_code query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.fiscal_code = after.organization_fiscal_code
+
+      # ============================================================
+      # Consistenza Cross-entity
+      # ============================================================
+      - count_orphan_payment_option_fk = 0:
+          name: xref__cns__gpd_payment_option__fk_payment_position_id
+          count_orphan_payment_option_fk query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_option spo
+            WHERE spo.op IN ('c', 'r', 'u')
+              AND NOT EXISTS (
+                SELECT 1
+                FROM pagopa.silver_gpd_payment_position spp
+                WHERE spp.op IN ('c', 'r', 'u')
+                  AND spp.after.id = spo.after.payment_position_id
+              )
+      - count_fiscal_code_incoherence = 0:
+          name: xref__cns__gpd_payment_position__fiscal_code_coherence
+          count_fiscal_code_incoherence query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position spp
+            JOIN pagopa.silver_gpd_payment_option spo
+              ON spo.after.payment_position_id = spp.after.id
+            WHERE spp.op IN ('c', 'r', 'u')
+              AND spo.op IN ('c', 'r', 'u')
+              AND spp.after.fiscal_code = spo.after.organization_fiscal_code
+      - count_due_date_exceeds_max_due_date = 0:
+          name: xref__cns__gpd_payment_position__max_due_date_not_exceeded
+          count_due_date_exceeds_max_due_date query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position spp
+            JOIN pagopa.silver_gpd_payment_option spo
+              ON spo.after.payment_position_id = spp.after.id
+            WHERE spp.op IN ('c', 'r', 'u')
+              AND spo.op IN ('c', 'r', 'u')
+              AND spo.after.due_date > spp.after.max_due_date

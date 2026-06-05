@@ -91,15 +91,29 @@ def _resolve_contract_path(
 
 
 
-def _normalize_sodacl(sodacl: str, dataset: str, table_name: str) -> str:
-    """Assicura che il nome tabella in SodaCL corrisponda al nome della vista temporanea Spark."""
+def _normalize_sodacl(sodacl: str, dataset: str, table_name: str, xref_datasets: list[str]) -> str:
+    """Assicura che il nome tabella in SodaCL corrisponda alla vista temporanea Spark, inclusi i dataset di xref."""
+    # 1. Normalizzazione tabella principale
     normalized = re.sub(
         r"checks for [^\s:]+:",
         f"checks for {table_name}:",
         sodacl,
     )
-    return normalized.replace(dataset, table_name)
-
+    normalized = normalized.replace(dataset, table_name)
+    
+    # 2. Normalizzazione tabelle xref (Rimozione DB prefix)
+    for xref in xref_datasets:
+        xref_table_name = xref.split(".")[-1].replace("-", "_")
+        
+        # Se l'utente ha scritto "pagopa.nome_tabella" nella query ma "nome_tabella" in xref,
+        # questa regex rimuove qualsiasi prefisso (es: db.schema.tabella -> tabella)
+        pattern = r'\b[a-zA-Z0-9_]+\.' + re.escape(xref_table_name) + r'\b'
+        normalized = re.sub(pattern, xref_table_name, normalized)
+        
+        # Sostituzione base per sicurezza
+        normalized = normalized.replace(xref, xref_table_name)
+        
+    return normalized
 
 def parse_contract_file(
     contract_path: str,
@@ -136,6 +150,9 @@ def parse_contract_file(
         dataset = quality_block.get("dataset", "")
         raw_sodacl = quality_block.get("specification", "")
         
+        xref_datasets_raw = quality_block.get("xref-dataset", [])
+        xref_datasets = xref_datasets_raw if isinstance(xref_datasets_raw, list) else [xref_datasets_raw]
+        
         if not dataset or not raw_sodacl:
             logger.error(f"File saltato '{filepath}': 'dataset' o 'specification' mancanti nel blocco 'quality'.")
             return None
@@ -146,7 +163,9 @@ def parse_contract_file(
         # 4. Recupero eventuali check Impala custom
         impala_quality_checks = doc.get("custom_impala_quality", [])
 
-        logger.debug(f"\n{'-'*30} CONTROLLI SODA ESTRATTI {'-'*30}\n{raw_sodacl}\n{'-'*88}")
+        normalized_sodacl = _normalize_sodacl(raw_sodacl, dataset, table_name, xref_datasets)
+
+        logger.debug(f"\n{'-'*30} CONTROLLI SODA ESTRATTI {'-'*30}\n{normalized_sodacl}\n{'-'*88}")
 
     except Exception as e:
         logger.error(f"Errore durante l'elaborazione del file {filepath}: {str(e)}")
@@ -158,6 +177,7 @@ def parse_contract_file(
         "contract_version": contract_version,
         "dataset":          dataset,
         "table_name":       table_name,
-        "sodacl":           _normalize_sodacl(raw_sodacl, dataset, table_name),
+        "xref_datasets":    xref_datasets,
+        "sodacl":           normalized_sodacl,
         "impala_checks":    impala_quality_checks,
     }
