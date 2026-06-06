@@ -75,6 +75,28 @@ checks for silver_t:
 """.strip()
 
 
+# Check nativi Soda (missing_count, invalid_count, ...): la condizione
+# incrementale non vive in una "* query" ma nella clausola "filter:".
+SODACL_NATIVO = """
+checks for silver_t:
+
+  # filter SOLO incrementale
+  - missing_count(op) = 0:
+      name: fld__cmp__op__not_null
+      filter: ${INCREMENTAL_CONDITIONS}
+
+  # filter combinato: condizione preesistente + incrementale concatenata
+  - missing_count(ts_ms) = 0:
+      name: fld__cmp__ts_ms__not_null
+      filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+
+  # check nativo massivo: filter senza placeholder, non va toccato
+  - missing_count(ts_us) = 0:
+      name: fld__cmp__ts_us__not_null
+      filter: op IN ('c', 'r', 'u')
+""".strip()
+
+
 # ---------------------------------------------------------------------------
 # Test
 # ---------------------------------------------------------------------------
@@ -251,3 +273,58 @@ def test_contract_senza_placeholder_non_chiama_il_lookup_e_non_popola_dict():
 
     m.assert_not_called()
     assert per_check_wm == {}
+
+
+# ---------------------------------------------------------------------------
+# Check nativi Soda con placeholder nella clausola filter
+# ---------------------------------------------------------------------------
+
+def test_sostituisce_placeholder_dentro_filter_dei_check_nativi():
+    """I check nativi (missing_count) mettono l'incrementale nel `filter:`.
+
+    - filter solo incrementale -> diventa la clausola completa
+    - filter combinato -> mantiene la condizione preesistente + AND incrementale
+    - filter senza placeholder -> resta invariato e non popola per_check_wm
+    """
+    cfg     = _make_config()
+    scan_ts = datetime(2026, 5, 27, 3, 0, 0)
+
+    with patch.object(engine, "_lookup_check_watermark") as m:
+        m.side_effect = [
+            datetime(2026, 5, 26, 0, 0, 0),   # op
+            datetime(2026, 5, 25, 0, 0, 0),   # ts_ms
+        ]
+        new_sodacl, per_check_wm = engine._resolve_per_check_watermarks(
+            spark=None,
+            config=cfg,
+            contract=_make_contract(SODACL_NATIVO),
+            scan_ts=scan_ts,
+            watermark_column="dl_event_tms",
+            cli_override=None,
+        )
+
+    spec   = yaml.safe_load(new_sodacl)
+    checks = spec["checks for silver_t"]
+
+    filter_op    = checks[0]["missing_count(op) = 0"]["filter"]
+    filter_ts_ms = checks[1]["missing_count(ts_ms) = 0"]["filter"]
+    filter_ts_us = checks[2]["missing_count(ts_us) = 0"]["filter"]
+
+    # filter solo incrementale: placeholder sostituito dalla clausola completa
+    assert "${INCREMENTAL_CONDITIONS}" not in filter_op
+    assert "dl_event_tms >"  in filter_op
+    assert "dl_event_tms <=" in filter_op
+
+    # filter combinato: la condizione preesistente sopravvive accanto a quella incrementale
+    assert "${INCREMENTAL_CONDITIONS}" not in filter_ts_ms
+    assert "op IN ('c', 'r', 'u')" in filter_ts_ms
+    assert "AND dl_event_tms >"     in filter_ts_ms
+
+    # filter massivo: invariato
+    assert filter_ts_us == "op IN ('c', 'r', 'u')"
+
+    # Solo i due check nativi incrementali popolano per_check_wm
+    assert set(per_check_wm.keys()) == {
+        "fld__cmp__op__not_null",
+        "fld__cmp__ts_ms__not_null",
+    }

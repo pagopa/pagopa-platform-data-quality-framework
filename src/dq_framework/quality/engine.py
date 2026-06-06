@@ -77,17 +77,27 @@ def _build_incremental_conditions(
     )
 
 
-# In SodaCL il campo che contiene la SQL custom puo' avere nomi diversi:
-#   - statici: "fail query", "failed rows query", "metric query"
-#   - dinamici: "<metric_name> query" per i user-defined metric check
-#     (es. nel contract: "count_due_date_exceeds_max_due_date query")
-# Generalizziamo: una chiave del blocco check e' candidata se finisce con
-# " query" (spazio + "query"). Il primo match in ogni check vince.
-def _find_query_field(check_body: dict) -> Optional[str]:
-    return next(
-        (k for k in check_body if isinstance(k, str) and k.endswith(" query")),
-        None,
-    )
+# Il placeholder incrementale puo' comparire in due punti del check, a seconda
+# che si tratti di un check con SQL custom o di un check nativo Soda:
+#   - SQL custom: chiave che termina con " query"
+#       statiche: "fail query", "failed rows query", "metric query"
+#       dinamiche: "<metric_name> query" per i user-defined metric check
+#       (es. "count_due_date_exceeds_max_due_date query")
+#   - check nativo (missing_count, invalid_count, duplicate_count, ...): non
+#     hanno una query, la condizione incrementale va nella clausola "filter:".
+#     Il filter puo' gia' contenere altre condizioni (es. "op IN ('c','r','u')")
+#     a cui l'utente concatena " AND ${INCREMENTAL_CONDITIONS}".
+# Restituiamo TUTTI i campi del check il cui valore contiene il placeholder,
+# cosi' la sostituzione e' robusta anche se un check ne avesse piu' di uno.
+def _incremental_fields(check_body: dict, placeholder: str) -> list[str]:
+    return [
+        k
+        for k, v in check_body.items()
+        if isinstance(k, str)
+        and isinstance(v, str)
+        and placeholder in v
+        and (k == "filter" or k.endswith(" query"))
+    ]
 
 
 def _resolve_per_check_watermarks(
@@ -144,14 +154,12 @@ def _resolve_per_check_watermarks(
                     # Senza nome non possiamo fare lookup; skip silente
                     continue
 
-                # Identifica il campo query del check (se presente)
-                query_field = _find_query_field(check_body)
-                if query_field is None:
-                    continue
-
-                query_text = check_body[query_field]
-                if not isinstance(query_text, str) or placeholder not in query_text:
-                    # Check massivo (o senza placeholder): non lo tocchiamo
+                # Campi del check che contengono il placeholder incrementale:
+                # il "* query" per i check con SQL custom, la clausola "filter:"
+                # per i check nativi Soda (missing_count, invalid_count, ...).
+                target_fields = _incremental_fields(check_body, placeholder)
+                if not target_fields:
+                    # Check massivo (nessun placeholder): non lo tocchiamo
                     continue
 
                 # --- Risoluzione wm_from per questo specifico check ---
@@ -181,13 +189,14 @@ def _resolve_per_check_watermarks(
                         f"wm_from={wm_from} >= wm_to={scan_ts}"
                     )
 
-                # --- Sostituzione localizzata del placeholder nella query ---
+                # --- Sostituzione localizzata del placeholder ---
                 conditions_sql = _build_incremental_conditions(
                     watermark_column, wm_from, scan_ts
                 )
-                check_body[query_field] = query_text.replace(
-                    placeholder, conditions_sql
-                )
+                for field in target_fields:
+                    check_body[field] = check_body[field].replace(
+                        placeholder, conditions_sql
+                    )
                 per_check_wm[check_name] = wm_from
 
                 logger.info(
