@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from pyspark.sql import SparkSession
+from pyspark.storagelevel import StorageLevel
 from soda.scan import Scan
 from soda.sampler.sampler import Sampler
 from soda.sampler.sample_ref import SampleRef
@@ -82,7 +83,17 @@ def run_dataframe_soda_scan(spark: SparkSession, contract: dict, config: AppConf
         df = spark.table(safe_dataset)
         
         if config.table_limit and config.table_limit > 0:
-            df = df.limit(config.table_limit)
+            # Il limit serve solo in dev/test come smoke-test su dati ridotti.
+            # df.limit(...) e' un piano LAZY: senza persist verrebbe ricalcolato
+            # da zero (ri-lettura sorgente + shuffle del GlobalLimit) ad OGNI
+            # check Soda, perche' ogni check e' un job Spark separato. Su tabelle
+            # sorgente frammentate questo costa minuti per scan. Materializziamo
+            # le N righe UNA volta sola in cache (il count() qui sotto la popola):
+            # tutti i check successivi leggono dalla RAM.
+            # NB: con table_limit=0 (prod) NON si cacha: la view resta lazy e i
+            # check incrementali sfruttano il pushdown/partition-pruning Iceberg
+            # su dl_event_tms. Cachare l'intera tabella prod lo annullerebbe.
+            df = df.limit(config.table_limit).persist(StorageLevel.MEMORY_AND_DISK)
 
         total_rows = df.count()
         logger.info(f"Il DataFrame contiene {total_rows} righe che verranno scansionate.")
@@ -144,5 +155,10 @@ def run_dataframe_soda_scan(spark: SparkSession, contract: dict, config: AppConf
 
     scan.execute()
     checks = scan.get_scan_results().get("checks", [])
+
+    # Libera la cache se attivata col limit: lo scan e' finito e i campioni
+    # failed-rows sono gia' in RAM nel sampler (la temp view non serve piu').
+    if config.table_limit and config.table_limit > 0:
+        df.unpersist()
 
     return checks, total_rows, sampler
