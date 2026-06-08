@@ -110,9 +110,6 @@ def _failed_row_count(chk: dict, diag: dict) -> Optional[int]:
     if not is_bad_row_count and "failed rows:" in check_def:
         is_bad_row_count = True
 
-    if not is_bad_row_count and _CHECK_NAME_RE.match(check_name):
-        is_bad_row_count = True
-
     if is_bad_row_count:
         val = diag.get("value")
         if val is not None:
