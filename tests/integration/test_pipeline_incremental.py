@@ -18,6 +18,7 @@ import os
 from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -157,6 +158,12 @@ def test_pipeline_incrementale_due_run_consecutive(spark, setup_source_table, mo
                  "diagnostics": {"value": 0}},
             ],
             5,  # total_rows
+            # 3o elemento: il sampler dei failed-rows. run_pipeline spacchetta
+            # (soda_checks, total_rows, sampler). Qui i check sono tutti 'pass'
+            # quindi non ci sono failed-row: basta uno stub con .failed_data
+            # vuoto. NB: non importiamo MemorySampler reale per non trascinare
+            # la dipendenza soda-core-spark che questo test evita di proposito.
+            SimpleNamespace(failed_data={}),
         )
 
     monkeypatch.setattr(engine, "run_dataframe_soda_scan", fake_scan)
@@ -174,6 +181,14 @@ def test_pipeline_incrementale_due_run_consecutive(spark, setup_source_table, mo
         df_results.write.mode("append").format("parquet").saveAsTable(fqn)
 
     monkeypatch.setattr(engine, "_write_results_to_iceberg", fake_write_results)
+
+    # _process_and_write_failed_records crea/scrive la tabella failed_records via
+    # Iceberg (CREATE TABLE ... USING iceberg + writeTo.append), non disponibile
+    # in locale. Il test verifica il flusso watermark, non la persistenza dei
+    # failed-record: lo rendiamo no-op.
+    monkeypatch.setattr(
+        engine, "_process_and_write_failed_records", lambda *a, **k: None
+    )
 
     # `run_pipeline` chiama `spark.stop()` alla fine. Nel test la SparkSession
     # e' una fixture condivisa tra le due run consecutive (Spark e' singleton

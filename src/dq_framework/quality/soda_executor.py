@@ -77,6 +77,10 @@ def run_dataframe_soda_scan(spark: SparkSession, contract: dict, config: AppConf
     # Estraiamo il DB principale come fallback per le xref
     main_db = contract["dataset"].split(".")[0] if "." in contract["dataset"] else ""
 
+    # DataFrame xref messi in cache (solo in dev/test, vedi sotto): da liberare
+    # con unpersist a fine scan.
+    persisted_xref_dfs = []
+
     try:
         # 1. Caricamento Dataset Principale
         safe_dataset = ".".join([f"`{part}`" for part in contract["dataset"].split(".")])
@@ -112,7 +116,14 @@ def run_dataframe_soda_scan(spark: SparkSession, contract: dict, config: AppConf
             
             try:
                 df_xref = spark.table(xref_safe)
-                
+
+                if config.table_limit and config.table_limit > 0:
+                    df_xref = df_xref.limit(config.table_limit).persist(
+                        StorageLevel.MEMORY_AND_DISK
+                    )
+                    df_xref.count()
+                    persisted_xref_dfs.append(df_xref)
+
                 df_xref.createOrReplaceTempView(xref_table_name)
                 logger.info(f"Temp View XREF creata con successo: {xref_table_name} (da {xref_full_name})")
             except Exception as e:
@@ -157,8 +168,10 @@ def run_dataframe_soda_scan(spark: SparkSession, contract: dict, config: AppConf
     checks = scan.get_scan_results().get("checks", [])
 
     # Libera la cache se attivata col limit: lo scan e' finito e i campioni
-    # failed-rows sono gia' in RAM nel sampler (la temp view non serve piu').
+    # failed-rows sono gia' in RAM nel sampler (le temp view non servono piu').
     if config.table_limit and config.table_limit > 0:
         df.unpersist()
+        for dfx in persisted_xref_dfs:
+            dfx.unpersist()
 
     return checks, total_rows, sampler
