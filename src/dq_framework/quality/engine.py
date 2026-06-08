@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 import json
+import re
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -19,6 +20,23 @@ from .soda_executor import run_dataframe_soda_scan
 from dq_framework.common.config.dataset_mapping import DATASET_PK_MAP
 
 logger = logging.getLogger(__name__)
+
+# Regex del placeholder incrementale. Riconosce sia la forma "nuda"
+# ${INCREMENTAL_CONDITIONS} sia quella qualificata con un alias di tabella
+# ${INCREMENTAL_CONDITIONS:spo} (gruppo 1 = alias, None se assente).
+# L'alias serve per le query con JOIN dove la colonna watermark esiste su piu'
+# tabelle (es. due tabelle CDC con dl_event_tms): senza qualificazione Spark
+# solleva [AMBIGUOUS_REFERENCE]. Il predicato watermark deve riferirsi alla
+# tabella DRIVING della slice (es. spo: si verificano le NUOVE payment_option,
+# non le nuove payment_position) e solo l'autore della query la conosce.
+# La grammatica dell'alias e' un singolo identificatore SQL [A-Za-z_][A-Za-z0-9_]*:
+# un alias malformato (':' vuoto, ':a.b' con punto, ':9x' con cifra iniziale)
+# NON matcha affatto, quindi il token resta non sostituito e fallisce in modo
+# rumoroso allo scan (nessuna sostituzione silenziosa/parziale).
+# NB: tenere allineato a config.incremental_placeholder ("${INCREMENTAL_CONDITIONS}").
+_INCREMENTAL_RE = re.compile(
+    r"\$\{INCREMENTAL_CONDITIONS(?::([A-Za-z_][A-Za-z0-9_]*))?\}"
+)
 
 def _lookup_check_watermark(
     spark: SparkSession,
@@ -59,6 +77,7 @@ def _build_incremental_conditions(
     watermark_column: str,
     wm_from: datetime,
     wm_to: datetime,
+    alias: Optional[str] = None,
 ) -> str:
     """Genera la clausola SQL da sostituire al placeholder.
 
@@ -66,14 +85,20 @@ def _build_incremental_conditions(
         <col> > TIMESTAMP 'YYYY-MM-DD HH:MM:SS.ffffff'
           AND <col> <= TIMESTAMP 'YYYY-MM-DD HH:MM:SS.ffffff'
 
+    Se `alias` e' valorizzato, la colonna viene qualificata (`<alias>.<col>`):
+    indispensabile nelle query con JOIN dove piu' tabelle espongono la stessa
+    colonna watermark. Con `alias=None` l'output e' identico alla forma nuda
+    (retrocompatibilita' totale).
+
     I literal TIMESTAMP con microsecondi sono pushdown-friendly su Iceberg via
     Catalyst, e su tabelle partizionate per `DAY(<col>)` permettono partition
     pruning aggressivo.
     """
     fmt = "%Y-%m-%d %H:%M:%S.%f"
+    col = f"{alias}.{watermark_column}" if alias else watermark_column
     return (
-        f"{watermark_column} > TIMESTAMP '{wm_from.strftime(fmt)}' "
-        f"AND {watermark_column} <= TIMESTAMP '{wm_to.strftime(fmt)}'"
+        f"{col} > TIMESTAMP '{wm_from.strftime(fmt)}' "
+        f"AND {col} <= TIMESTAMP '{wm_to.strftime(fmt)}'"
     )
 
 
@@ -87,15 +112,19 @@ def _build_incremental_conditions(
 #     hanno una query, la condizione incrementale va nella clausola "filter:".
 #     Il filter puo' gia' contenere altre condizioni (es. "op IN ('c','r','u')")
 #     a cui l'utente concatena " AND ${INCREMENTAL_CONDITIONS}".
-# Restituiamo TUTTI i campi del check il cui valore contiene il placeholder,
-# cosi' la sostituzione e' robusta anche se un check ne avesse piu' di uno.
-def _incremental_fields(check_body: dict, placeholder: str) -> list[str]:
+# Restituiamo TUTTI i campi del check il cui valore contiene il placeholder
+# (nuda o con alias), cosi' la sostituzione e' robusta anche con piu' di uno.
+# IMPORTANTE: usiamo la regex e non un substring match perche'
+# "${INCREMENTAL_CONDITIONS:spo}" NON contiene "${INCREMENTAL_CONDITIONS}" come
+# sottostringa (il ":spo" sposta la graffa di chiusura). Un test a sottostringa
+# tratterebbe quindi i check aliased come massivi, saltandoli silenziosamente.
+def _incremental_fields(check_body: dict) -> list[str]:
     return [
         k
         for k, v in check_body.items()
         if isinstance(k, str)
         and isinstance(v, str)
-        and placeholder in v
+        and _INCREMENTAL_RE.search(v)
         and (k == "filter" or k.endswith(" query"))
     ]
 
@@ -125,7 +154,6 @@ def _resolve_per_check_watermarks(
 
     Solleva ValueError se per qualche check `wm_from >= scan_ts`.
     """
-    placeholder = config.incremental_placeholder
     spec_dict = yaml.safe_load(contract["sodacl"])
     per_check_wm: dict[str, datetime] = {}
 
@@ -157,7 +185,7 @@ def _resolve_per_check_watermarks(
                 # Campi del check che contengono il placeholder incrementale:
                 # il "* query" per i check con SQL custom, la clausola "filter:"
                 # per i check nativi Soda (missing_count, invalid_count, ...).
-                target_fields = _incremental_fields(check_body, placeholder)
+                target_fields = _incremental_fields(check_body)
                 if not target_fields:
                     # Check massivo (nessun placeholder): non lo tocchiamo
                     continue
@@ -190,13 +218,31 @@ def _resolve_per_check_watermarks(
                     )
 
                 # --- Sostituzione localizzata del placeholder ---
-                conditions_sql = _build_incremental_conditions(
-                    watermark_column, wm_from, scan_ts
-                )
-                for field in target_fields:
-                    check_body[field] = check_body[field].replace(
-                        placeholder, conditions_sql
+                # re.sub con callback: ogni occorrenza risolve il proprio alias
+                # (gruppo 1) condividendo lo stesso wm_from del check. Un campo
+                # puo' quindi contenere piu' placeholder, ciascuno con (o senza)
+                # alias, sostituiti in un solo passaggio. wm_from e' legato come
+                # default-arg per evitare il late-binding del loop.
+                def _sub(m, _wm_from=wm_from):
+                    return _build_incremental_conditions(
+                        watermark_column, _wm_from, scan_ts, m.group(1)
                     )
+
+                for field in target_fields:
+                    value = check_body[field]
+                    # Advisory (non bloccante): placeholder NUDO su una query con
+                    # JOIN e' quasi sempre un errore di colonna ambigua. Non
+                    # indoviniamo l'alias: solo un warning per guidare l'autore.
+                    if (" join " in value.lower()
+                            and "${INCREMENTAL_CONDITIONS}" in value):
+                        logger.warning(
+                            f"Check '{check_name}', campo '{field}': placeholder "
+                            f"${{INCREMENTAL_CONDITIONS}} nudo in una query con "
+                            f"JOIN; se la colonna watermark esiste su piu' tabelle "
+                            f"usare ${{INCREMENTAL_CONDITIONS:<alias>}} per "
+                            f"qualificarla con la tabella driving."
+                        )
+                    check_body[field] = _INCREMENTAL_RE.sub(_sub, value)
                 per_check_wm[check_name] = wm_from
 
                 logger.info(
@@ -493,7 +539,12 @@ def run_pipeline(
     per_check_wm: dict[str, datetime] = {}
     effective_watermark_column: Optional[str] = None
 
-    if config.incremental_placeholder in contract["sodacl"]:
+    # NB: usiamo la regex (non `config.incremental_placeholder in ...`) perche'
+    # un contract con SOLI placeholder aliased (${INCREMENTAL_CONDITIONS:spo})
+    # non contiene la sottostringa nuda: con il vecchio check la pipeline
+    # salterebbe la fase incrementale e il placeholder finirebbe non sostituito
+    # nella SQL passata a Soda (errore certo).
+    if _INCREMENTAL_RE.search(contract["sodacl"]):
         effective_watermark_column = (
             watermark_column_override
             or config.default_watermark_column

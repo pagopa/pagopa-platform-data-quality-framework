@@ -54,3 +54,25 @@ def test_supporta_colonne_qualificate():
     )
     assert cond.startswith("events.updated_at > TIMESTAMP")
     assert "AND events.updated_at <= TIMESTAMP" in cond
+
+
+def test_alias_qualifica_la_colonna():
+    """Con alias la colonna viene prefissata con <alias>. (caso JOIN)."""
+    cond = _build_incremental_conditions(
+        "dl_event_tms", datetime(2026, 5, 24), datetime(2026, 5, 25), alias="spo"
+    )
+    assert cond.startswith("spo.dl_event_tms > TIMESTAMP")
+    assert "AND spo.dl_event_tms <= TIMESTAMP" in cond
+
+
+def test_alias_none_e_byte_identico_alla_forma_nuda():
+    """alias=None deve produrre output identico alla chiamata senza alias
+    (garanzia di retrocompatibilita' totale)."""
+    wm_from = datetime(2026, 5, 24, 3, 0, 0, 123456)
+    wm_to   = datetime(2026, 5, 27, 3, 0, 0, 654321)
+
+    nudo     = _build_incremental_conditions("dl_event_tms", wm_from, wm_to)
+    none_arg = _build_incremental_conditions(
+        "dl_event_tms", wm_from, wm_to, alias=None
+    )
+    assert nudo == none_arg

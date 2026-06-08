@@ -1,0 +1,845 @@
+dataContractSpecification: 0.9.3
+id: urn:pagopa:gpd:payment-position
+info:
+  title: Payment Position Contract
+  description: Oggetto che rappresenta l'entità Posiione Debitoria
+  owner: pagoPA QA-Team
+  version: 0.0.1
+  contact:
+    name: Andrea Ferracci (Data Owner)
+    url: https://pagopa.atlassian.net/wiki/spaces/PPR/pages/1307279559/DR+-+Ingestion+dati+GPD
+    email: andrea.ferracci@pagopa.it
+    slack-channel: https://pagopaspa.slack.com/archives/C015HN4UZAM
+
+confluenceSpaces:
+  - PAGOPA
+
+### servers
+servers:
+  production:
+    type: kafka
+    host: sb://pagopa-p-itn-observ-gpd-evh.servicebus.windows.net
+    topic: gpd-ingestion.apd.payment_position
+    format: json
+  uat:
+    type: kafka
+    host: sb://pagopa-u-itn-observ-gpd-evh.servicebus.windows.net
+    topic: gpd-ingestion.apd.payment_position
+    format: json
+
+### terms
+terms:
+  usage: >
+    - Gli eventi di delete `d` presentano soltanto la sezione `before`, mentre gli eventi di create `c`, update `u`
+      e read `r` prevedono soltanto la sezione `afetr`
+    - Gli eventi di delete si riferiscono ad eventi di cancellazione fisica sul database, il campo effettivamente
+      valorizzato in caso di delete è `id`, tutti gli altri campi indicati all'interno dello schema vengono inviati
+      a blank `""` o zero `0`
+  limitations: >
+    - Nessuna limitazione da segnalare
+  noticePeriod: P1M
+
+### models
+models:
+  payment-position:
+    description: Modello utilizzato per rappresentare l'entità `payment-position`
+    fields:
+      after:
+        type: record
+        required: false
+        description: Sezione che contiente il contenuto dei campi a valle di un'operazione di update o create
+        fields:
+          id:
+            title: Chiave primaria
+            type: int
+            required: true
+            description: Chiave primaria sulla tabella sorgente della posizione debitoria
+            example: "11"
+            pii: false
+          iupd:
+            title: IUPD
+            type: string
+            required: true
+            description: Identificativo Univoco della Posizione Debitoria (forma una chiave univoca con organization_fiscal_code)
+            example: "IUPD_183151"
+            pii: false
+          fiscal_code:
+            title: Codice Fiscale Debtore
+            type: string
+            required: true
+            description: Codice fiscale debitore tokenizzato
+            example: "d59f5b6e-0bd1-4e36-9c5d-51baf36df291"
+            pii: true
+          postal_code:
+            title: Codice avviamento postale debitore
+            type: string
+            required: false
+            description: Codice avviamento postale debitore
+            example: "89812"
+            pii: false
+          province:
+            title: Provinca residenza debitore
+            type: string
+            required: false
+            description: Provincia residenza debitore
+            example: "VV"
+            pii: false
+          max_due_date:
+            title: Max due date
+            type: long
+            required: true
+            description: Data scadenza massima della posizione debitoria (max della dueDate di tutte le opzioni di pagamento presenti)
+            example: "1734019828070000"
+            pii: false
+          min_due_date:
+            title: Min Due Date
+            type: long
+            required: true
+            description: Data scadena più vicina tra tutte le opzioni di pagamento presenti
+            example: "1734019828070000"
+            pii: false
+          organization_fiscal_code:
+            title: Codice fiscale EC
+            type: string
+            required: true
+            description: Codice fiscale Ente Creditore (forma una chiave univoca con iupd)
+            example: "77777777777"
+            pii: false
+          company_name:
+            title: Ragione Sociale
+            type: string
+            required: true
+            description: Ragione sociale ente creditore
+            example: "Testing S.p.A."
+            pii: false
+          publish_date:
+            title: Data Pubblicazione
+            type: long
+            required: false
+            description: Data di pubblicazione della posizione debitoria
+            example: "1731427830566126"
+            pii: false
+          region:
+            title: Regione
+            type: string
+            required: false
+            description: Regione debitore
+            example: "CA"
+            pii: false
+          status:
+            title: Stato
+            type: string
+            enum:
+              - DRAFT
+              - PUBLISHED
+              - VALID
+              - PAID
+              - EXPIRED
+              - INVALID
+              - REPORTED
+              - PARTIALLY_PAID
+            required: true
+            description: Stato della posizione debitoria (P = persona fisica, F = persona giuridica)
+            example: "PAID"
+            pii: false
+          type:
+            title: Tipologia Debitore
+            type: string
+            enum:
+              - G
+              - F
+            required: true
+            description: Tipologia debitore
+            example: "F"
+            pii: false
+          validity_date:
+            title: Data Inizio Validità
+            type: long
+            required: false
+            description: Data a pertire dalla quale la posizione debitoria entra nello stato VALID (pagabile)
+            example: "1731427830566126"
+            pii: false
+          switch_to_expired:
+            title: Stato EXPIRED automatico
+            type: boolean
+            required: true
+            description: |
+              Indica se al sopraggiungimento della max_due_date la posizione debitoria deve essere messa automaticamente
+              nello stato EXPIRED (stato finale irreversibile)
+            example: "false"
+            pii: false
+          payment_date:
+            title: Data Pagamento
+            type: long
+            required: false
+            description: Data in cui è stata pagata la posizione debitoria
+            example: "1731427831276000"
+            pii: false
+          last_updated_date:
+            title: Data ultima modifica
+            type: long
+            required: true
+            description: Data di ultima modifica della posizione debitoria
+            example: "1731427833868537"
+            pii: false
+          inserted_date:
+            title: Data inserimento
+            type: long
+            required: true
+            description: Data inserimento della posizione debitoria
+            example: "1731427828077833"
+            pii: false
+          service_type:
+            title: Tipologia posizione debitoria
+            type: string
+            enum:
+              - GPD
+              - ACA
+              - WISP
+            required: false
+            description: Tipologia o natura della posizione debitoria (es. GPD, ACA o WISP)
+            example: GPD
+            pii: false
+      before:
+        type: record
+        required: false
+        description: Sezione che contiente il contenuto dei campi a valle di un'operazione di delete
+        fields:
+          id:
+            title: Chiave primaria
+            type: int
+            required: true
+            description: Chiave primaria sulla tabella sorgente della posizione debitoria
+            example: "17"
+            pii: false
+          iupd:
+            title: IUPD
+            type: string
+            required: false
+            description: Identificativo Univoco della Posizione Debitoria (forma una chiave univoca con organization_fiscal_code)
+            example: ""
+            pii: false
+          fiscal_code:
+            title: Codice fiscale debitore
+            type: string
+            required: false
+            description: Codice fiscale debitore
+            example: ""
+            pii: true
+          max_due_date:
+            title: Data scadenza masima
+            type: long
+            required: false
+            description: Data scadenza massima tra tutte le opzioni di pagamento presenti
+            example: "0"
+            pii: false
+          min_due_date:
+            title: Data scadenza minima
+            type: long
+            required: false
+            description: Data scadenza minima tra tutte le opzioni di pagamento presenti
+            example: "0"
+            pii: false
+          organization_fiscal_code:
+            title: Codice fiscale EC
+            type: string
+            required: false
+            description: Codice fiscale Ente Creditore (forma una chiave univoca con iupd)
+            example: ""
+            pii: false
+          company_name:
+            title: Ragione Sociale
+            type: string
+            required: false
+            description: Ragione sociale ente creditore
+            example: ""
+            pii: false
+          type:
+            title: Tipologia debitore
+            type: string
+            enum:
+              - G
+              - F
+            required: false
+            description: Stato della posizione debitoria (P = persona fisica, F = persona giuridica)
+            example: ""
+            pii: false
+          switch_to_expired:
+            title: Stato EXPIRED automatico
+            type: boolean
+            required: true
+            description: |
+              Indica se al sopraggiungimento della max_due_date la posizione debitoria deve essere messa automaticamente
+              nello stato EXPIRED (stato finale irreversibile)
+            example: "false"
+            pii: false
+          last_updated_date:
+            title: Data ultima modifica
+            type: long
+            required: false
+            description: Data di ultima modifica della posizione debitoria
+            example: "0"
+            pii: false
+          inserted_date:
+            title: Data inserimento
+            type: long
+            required: false
+            description: Data inserimento della posizione debitoria
+            example: "0"
+            pii: false
+          service_type:
+            title: Tipologia posizione debitoria
+            type: string
+            enum:
+              - GPD
+              - ACA
+              - WISP
+            required: false
+            description: Tipologia o natura della posizione debitoria (es. GPD, ACA o WISP)
+            example: GPD
+            pii: false
+      op:
+        title: Tipo evento
+        type: string
+        required: true
+        description: Tipo evento (r=read, c=create, u=update, d=delete)
+        example: "r"
+        enum:
+          - r
+          - c
+          - u
+          - d
+        pii: false
+      ts_ms:
+        title: Data ultima modifica in millis local timezone
+        type: long
+        required: true
+        description: Data ultima modifica evento
+        example: "1731429125321"
+        pii: false
+      ts_us:
+        title: Data ultima modifica in millis US timezone
+        type: long
+        required: true
+        description: Data ultima modifica evento
+        example: "1731429125321816"
+        pii: false
+      ts_ns:
+        title: Data ultima modifica in nanosecondi local timezone
+        type: long
+        required: true
+        description: Data ultima modifica evento
+        example: "1731429125321816583"
+        pii: false
+
+### schema
+schema:
+  type: avro
+  specification:
+    models:
+      - payment-position:  |-
+          {
+            "type": "record",
+            "name": "EventData",
+            "fields": [
+              {
+                "name": "after",
+                "type": [
+                  "null",
+                  {
+                    "type": "record",
+                    "name": "AfterRecord",
+                    "fields": [
+                      {"name": "id", "type": "int"},
+                      {"name": "iupd", "type": "string"},
+                      {"name": "fiscal_code", "type": "string"},
+                      {"name": "postal_code", "type": ["null", "string"]},
+                      {"name": "province", "type": ["null", "string"]},
+                      {"name": "max_due_date", "type": "long"},
+                      {"name": "min_due_date", "type": "long"},
+                      {"name": "organization_fiscal_code", "type": "string"},
+                      {"name": "company_name", "type": "string"},
+                      {"name": "publish_date", "type": ["null", "long"]},
+                      {"name": "region", "type": ["null", "string"]},
+                      {"name": "status", "type": "string"},
+                      {"name": "type", "type": "string"},
+                      {"name": "validity_date", "type": ["null", "long"]},
+                      {"name": "switch_to_expired", "type": "boolean"},
+                      {"name": "payment_date", "type": ["null", "long"]},
+                      {"name": "last_updated_date", "type": "long"},
+                      {"name": "inserted_date", "type": "long"},
+                      {"name": "service_type", "type": ["null", "string"]}
+                    ]
+                  }
+                ],
+                "default": null
+              },
+              {
+                "name": "before",
+                "type": [
+                  "null",
+                  {
+                    "type": "record",
+                    "name": "BeforeRecord",
+                    "fields": [
+                      {"name": "id", "type": "int"},
+                      {"name": "iupd", "type": ["null", "string"]},
+                      {"name": "fiscal_code", "type": ["null", "string"]},
+                      {"name": "max_due_date", "type": ["null", "long"]},
+                      {"name": "min_due_date", "type": ["null", "long"]},
+                      {"name": "organization_fiscal_code", "type": ["null", "string"]},
+                      {"name": "company_name", "type": ["null", "string"]},
+                      {"name": "type", "type": ["null", "string"]},
+                      {"name": "switch_to_expired", "type": "boolean"},
+                      {"name": "last_updated_date", "type": ["null", "long"]},
+                      {"name": "inserted_date", "type": ["null", "long"]},
+                      {"name": "service_type", "type": ["null", "string"]}
+                    ]
+                  }
+                ],
+                "default": null
+              },
+              {"name": "op", "type": "string"},
+              {"name": "ts_ms", "type": "long"},
+              {"name": "ts_us", "type": "long"},
+              {"name": "ts_ns", "type": "long"}
+            ]
+          }
+
+### examples
+examples:
+  - type: json
+    model: payment-position
+    description: Esempio di evento payment-position
+    data: |-
+      {
+        "after": {
+          "id": 11,
+          "iupd": "IUPD_183151",
+          "fiscal_code": "d59f5b6e-0bd1-4e36-9c5d-51baf36df291",
+          "postal_code": "89812",
+          "province": "VV",
+          "max_due_date": 1734019828070000,
+          "min_due_date": 1734019828070000,
+          "organization_fiscal_code": "77777777777",
+          "company_name": "Testing S.p.A.",
+          "publish_date": 1731427830566126,
+          "region": "CA",
+          "status": "PAID",
+          "type": "F",
+          "validity_date": 1731427830566126,
+          "switch_to_expired": false,
+          "payment_date": 1731427831276000,
+          "last_updated_date": 1731427833868537,
+          "inserted_date": 1731427828077833,
+          "service_type": "GPD"
+        },
+        "before": {
+          "id": 17,
+          "iupd": "",
+          "fiscal_code": "",
+          "max_due_date": 0,
+          "min_due_date": 0,
+          "organization_fiscal_code": "",
+          "company_name": "",
+          "type": "",
+          "switch_to_expired": false,
+          "last_updated_date": 0,
+          "inserted_date": 0,
+          "service_type": ""
+        },
+        "op": "r",
+        "ts_ms": 1731429125321,
+        "ts_us": 1731429125321816,
+        "ts_ns": 1731429125321816583
+      }
+
+### service levels
+servicelevels:
+  availability:
+    description: Il servizio è garantito 24/7
+    percentage: 99.9%
+  retention:
+    description: si tratta di un dato di configurazioe che dipende dalla tipologia della posizione debitoria, varia da 24h a 1 anno
+    unlimited: true
+  latency:
+    description: Gli eventi di lettura, inserimento, modifica e cancellazione, vengono recepite entro 2 minuti
+    threshold: PT1H
+  freshness:
+    description: I dati vengono importati in modalità near real time
+  frequency:
+    description: In modo continuo
+    type: streaming
+    interval: ogni tipologia di modifica
+  support:
+    description: Disponibile 24/7
+    time: 24/7
+    responseTime: 30m
+  backup:
+    description: I dati sono replicati su due region
+    recoveryTime: 5m
+    recoveryPoint: 0m
+  growth:
+    rate: "15000000 record/year"
+    size: 12GB
+  updates:
+    fields:
+      - after.id
+      - after.iupd
+      - after.fiscal_code
+      - after.postal_code
+      - after.province
+      - after.max_due_date
+      - after.min_due_date
+      - after.organization_fiscal_code
+      - after.company_name
+      - after.publish_date
+      - after.region
+      - after.status
+      - after.type
+      - after.validity_date
+      - after.switch_to_expired
+      - after.payment_date
+      - after.last_updated_date
+      - after.inserted_date
+      - after.service_type
+      - op
+      - ts_ms
+      - ts_us
+      - ts_ns
+    lastUpdateField: ts_ms
+  deletes:
+    mode: hard
+    fields:
+      - before.id
+
+quality:
+  type: SodaCL
+  dataset: pagopa.silver_gpd_payment_position
+  xref-dataset:
+    - silver_gpd_payment_option
+  specification: |-
+    checks for payment-position:
+
+      # ============================================================
+      # Entity Level (ent__cmp) -- massivo
+      # ============================================================
+      - row_count > 0:
+          name: ent__cmp__dataset__not_empty
+
+      # ============================================================
+      # Completezza Campi Root (fld__cmp) -- incrementale
+      # Nota: ${INCREMENTAL_CONDITIONS} non supportato in filter: dei check nativi.
+      # ============================================================
+      - missing_count(op) = 0:
+          name: fld__cmp__op__not_null
+          filter: ${INCREMENTAL_CONDITIONS}
+      - missing_count(ts_ms) = 0:
+          name: fld__cmp__ts_ms__not_null
+          filter: ${INCREMENTAL_CONDITIONS}
+      - missing_count(ts_ns) = 0:
+          name: fld__cmp__ts_ns__not_null
+          filter: ${INCREMENTAL_CONDITIONS}
+      - missing_count(ts_us) = 0:
+          name: fld__cmp__ts_us__not_null
+          filter: ${INCREMENTAL_CONDITIONS}
+
+      # ============================================================
+      # Freschezza (fld__tim) -- massivo
+      # ============================================================
+      - freshness(dl_event_tms) < 1d:
+          name: fld__tim__dl_event_tms__freshness_1d
+
+      # ============================================================
+      # Completezza Campi After (fld__cmp) -- incrementale
+      # ============================================================
+      - missing_count(after.id) = 0:
+          name: fld__cmp__id__not_null
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+      - missing_count(after.iupd) = 0:
+          name: fld__cmp__iupd__not_null
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+      - missing_count(after.fiscal_code) = 0:
+          name: fld__cmp__fiscal_code__not_null
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+      - missing_count(after.min_due_date) = 0:
+          name: fld__cmp__min_due_date__not_null
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+      - missing_count(after.max_due_date) = 0:
+          name: fld__cmp__max_due_date__not_null
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+      - missing_count(after.organization_fiscal_code) = 0:
+          name: fld__cmp__organization_fiscal_code__not_null
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+      - missing_count(after.company_name) = 0:
+          name: fld__cmp__company_name__not_null
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+      - missing_count(after.status) = 0:
+          name: fld__cmp__status__not_null
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+      - missing_count(after.type) = 0:
+          name: fld__cmp__type__not_null
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+      - missing_count(after.switch_to_expired) = 0:
+          name: fld__cmp__switch_to_expired__not_null
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+      - missing_count(after.last_updated_date) = 0:
+          name: fld__cmp__last_update_date__not_null
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+      - missing_count(after.inserted_date) = 0:
+          name: fld__cmp__inserted_date__not_null
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+
+      # ============================================================
+      # Validita' - Enum (fld__vld) -- incrementale
+      # ============================================================
+      - invalid_count(after.status) = 0:
+          name: fld__vld__status__enum
+          valid values: ['DRAFT', 'PUBLISHED', 'VALID', 'PAID', 'EXPIRED', 'INVALID', 'REPORTED', 'PARTIALLY_PAID']
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+      - invalid_count(after.type) = 0:
+          name: fld__vld__type__enum
+          valid values: ['F', 'G']
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+      - invalid_count(after.service_type) = 0:
+          name: fld__vld__service_type__enum
+          valid values: ['GPD', 'ACA', 'WISP']
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+
+      # ============================================================
+      # Validita' - Pattern P.IVA (fld__vld) -- incrementale
+      # vat_format ATTIVO; cf_format DISABILITATO (EC = P.IVA, non CF).
+      # ============================================================
+      - invalid_count(after.organization_fiscal_code) = 0:
+          name: fld__vld__organization_fiscal_code__vat_format
+          valid regex: '^[0-9]{11}$'
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+      # DISABLED: fld__vld__organization_fiscal_code__cf_format
+
+      # ============================================================
+      # Validita' - Lunghezza Timestamp (fld__vld) -- incrementale
+      # NB: check MINIMA (<16) DISABLED per PIDM-1751/DLTE-828.
+      # ============================================================
+      - failed rows:
+          name: fld__vld__max_due_date__timestamp_length
+          fail query: |
+            SELECT dl_id, after.iupd, after.organization_fiscal_code, after.max_due_date
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.max_due_date IS NOT NULL
+              AND LENGTH(CAST(after.max_due_date AS STRING)) > 16
+              AND ${INCREMENTAL_CONDITIONS}
+      - failed rows:
+          name: fld__vld__min_due_date__timestamp_length
+          fail query: |
+            SELECT dl_id, after.iupd, after.organization_fiscal_code, after.min_due_date
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.min_due_date IS NOT NULL
+              AND LENGTH(CAST(after.min_due_date AS STRING)) > 16
+              AND ${INCREMENTAL_CONDITIONS}
+      - failed rows:
+          name: fld__vld__min_publish_date__timestamp_length
+          fail query: |
+            SELECT dl_id, after.iupd, after.organization_fiscal_code, after.publish_date
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.publish_date IS NOT NULL
+              AND LENGTH(CAST(after.publish_date AS STRING)) > 16
+              AND ${INCREMENTAL_CONDITIONS}
+      - failed rows:
+          name: fld__vld__validity_date__timestamp_length
+          fail query: |
+            SELECT dl_id, after.iupd, after.organization_fiscal_code, after.validity_date
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.validity_date IS NOT NULL
+              AND LENGTH(CAST(after.validity_date AS STRING)) > 16
+              AND ${INCREMENTAL_CONDITIONS}
+      - failed rows:
+          name: fld__vld__last_update_date__timestamp_length
+          fail query: |
+            SELECT dl_id, after.iupd, after.organization_fiscal_code, after.last_updated_date
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.last_updated_date IS NOT NULL
+              AND LENGTH(CAST(after.last_updated_date AS STRING)) > 16
+              AND ${INCREMENTAL_CONDITIONS}
+      - failed rows:
+          name: fld__vld__payment_date__timestamp_length
+          fail query: |
+            SELECT dl_id, after.iupd, after.organization_fiscal_code, after.payment_date
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.payment_date IS NOT NULL
+              AND LENGTH(CAST(after.payment_date AS STRING)) > 16
+              AND ${INCREMENTAL_CONDITIONS}
+
+      # ============================================================
+      # Validita' - Intervallo Date <= now() + 30y (fld__vld) -- incrementale
+      # ============================================================
+      - failed rows:
+          name: fld__vld__max_due_date__date_max_30y
+          fail query: |
+            SELECT dl_id, after.iupd, after.organization_fiscal_code, after.max_due_date
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.max_due_date IS NOT NULL
+              AND from_unixtime(after.max_due_date / 1000000) > add_months(current_timestamp(), 360)
+              AND ${INCREMENTAL_CONDITIONS}
+      - failed rows:
+          name: fld__vld__min_due_date__date_max_30y
+          fail query: |
+            SELECT dl_id, after.iupd, after.organization_fiscal_code, after.min_due_date
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.min_due_date IS NOT NULL
+              AND from_unixtime(after.min_due_date / 1000000) > add_months(current_timestamp(), 360)
+              AND ${INCREMENTAL_CONDITIONS}
+      - failed rows:
+          name: fld__vld__validity_date__date_max_30y
+          fail query: |
+            SELECT dl_id, after.iupd, after.organization_fiscal_code, after.validity_date
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.validity_date IS NOT NULL
+              AND from_unixtime(after.validity_date / 1000000) > add_months(current_timestamp(), 360)
+              AND ${INCREMENTAL_CONDITIONS}
+
+      # ============================================================
+      # Consistenza Intra-Entity (ent__cns / ent__cmp) -- incrementale
+      # ============================================================
+      - failed rows:
+          name: ent__cns__delete_event__before_fields_cleared
+          fail query: |
+            SELECT dl_id, before.id
+            FROM pagopa.silver_gpd_payment_position
+            WHERE (
+                (op = 'd' AND before.id IS NULL)
+                OR
+                (op = 'd' AND (
+                      before.iupd != ''
+                      OR before.fiscal_code != ''
+                      OR before.max_due_date != 0
+                      OR before.min_due_date != 0
+                      OR before.organization_fiscal_code != ''
+                      OR before.company_name != ''
+                      OR before.type != ''
+                      OR before.switch_to_expired != false
+                      OR before.last_updated_date != 0
+                      OR before.inserted_date != 0
+                ))
+              )
+              AND ${INCREMENTAL_CONDITIONS}
+      - failed rows:
+          name: ent__cmp__after_struct__conditional_presence
+          fail query: |
+            SELECT dl_id, op, ts_ms
+            FROM pagopa.silver_gpd_payment_position
+            WHERE (
+                (op IN ('c', 'r', 'u') AND after IS NULL)
+                OR (op = 'd' AND after IS NOT NULL)
+              )
+              AND ${INCREMENTAL_CONDITIONS}
+      - failed rows:
+          name: ent__cmp__before_struct__conditional_presence
+          fail query: |
+            SELECT dl_id, op, ts_ms
+            FROM pagopa.silver_gpd_payment_position
+            WHERE (
+                (op = 'd' AND before IS NULL)
+                OR (op IN ('c', 'r', 'u') AND before IS NOT NULL)
+              )
+              AND ${INCREMENTAL_CONDITIONS}
+      - failed rows:
+          name: ent__cns__payment_date_status__conditional_value
+          fail query: |
+            SELECT dl_id, after.iupd, after.organization_fiscal_code, after.payment_date, after.status
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.payment_date IS NOT NULL
+              AND after.status NOT IN ('PAID', 'REPORTED', 'PARTIALLY_PAID')
+              AND ${INCREMENTAL_CONDITIONS}
+      - failed rows:
+          name: ent__cns__publish_date_status__conditional_value
+          fail query: |
+            SELECT dl_id, after.iupd, after.organization_fiscal_code, after.publish_date, after.status
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.publish_date IS NULL
+              AND after.status <> 'DRAFT'
+              AND ${INCREMENTAL_CONDITIONS}
+      - failed rows:
+          name: ent__cns__switch_to_expired_max_due_date__conditional_value
+          fail query: |
+            SELECT dl_id, after.iupd, after.organization_fiscal_code, after.switch_to_expired, after.max_due_date
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.switch_to_expired = TRUE
+              AND after.max_due_date IS NOT NULL
+              AND from_unixtime(after.max_due_date / 1000000) > current_timestamp()
+              AND ${INCREMENTAL_CONDITIONS}
+      - failed rows:
+          name: ent__cns__fiscal_code__creditor_debtor_coherence
+          fail query: |
+            SELECT dl_id, after.iupd, after.fiscal_code, after.organization_fiscal_code
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.fiscal_code IS NOT NULL
+              AND after.organization_fiscal_code IS NOT NULL
+              AND after.fiscal_code = after.organization_fiscal_code
+              AND ${INCREMENTAL_CONDITIONS}
+
+      # ============================================================
+      # Unicita' Intra-Entity (ent__unq) -- massivo
+      # ============================================================
+      - failed rows:
+          name: ent__unq__iupd_org_fiscal_code__no_duplicates
+          fail query: |
+            SELECT after.iupd, after.organization_fiscal_code, COUNT(*) AS cnt
+            FROM pagopa.silver_gpd_payment_position
+            WHERE op IN ('c', 'r', 'u')
+              AND after.iupd IS NOT NULL
+              AND after.organization_fiscal_code IS NOT NULL
+            GROUP BY after.iupd, after.organization_fiscal_code
+            HAVING COUNT(*) > 1
+
+      # ============================================================
+      # Consistenza Cross-entity (xref__cns)
+      # NOT EXISTS riscritto come LEFT JOIN ... IS NULL (workaround Spark STRUCT issue).
+      # ============================================================
+      - failed rows:
+          name: xref__cns__payment_position__referential_integrity
+          fail query: |
+            SELECT spo.dl_id, spo.after.iuv, spo.after.organization_fiscal_code, spo.after.payment_position_id
+            FROM pagopa.silver_gpd_payment_option spo
+            LEFT JOIN pagopa.silver_gpd_payment_position spp
+              ON spp.op IN ('c', 'r', 'u')
+              AND spp.after.id = spo.after.payment_position_id
+            WHERE spo.op IN ('c', 'r', 'u')
+              AND spp.dl_id IS NULL
+              AND ${INCREMENTAL_CONDITIONS:spo}
+      - failed rows:
+          name: xref__cns__payment_option__fiscal_code_coherence
+          fail query: |
+            SELECT spp.dl_id, spp.after.iupd, spp.after.fiscal_code, spo.after.organization_fiscal_code
+            FROM pagopa.silver_gpd_payment_position spp
+            JOIN pagopa.silver_gpd_payment_option spo
+              ON spo.after.payment_position_id = spp.after.id
+            WHERE spp.op IN ('c', 'r', 'u')
+              AND spo.op IN ('c', 'r', 'u')
+              AND spp.after.fiscal_code = spo.after.organization_fiscal_code
+              AND ${INCREMENTAL_CONDITIONS:spp}
+      - failed rows:
+          name: xref__cns__due_dates__temporal_sequence
+          fail query: |
+            SELECT spo.dl_id, spo.after.iuv, spo.after.organization_fiscal_code, spo.after.due_date, spp.after.max_due_date
+            FROM pagopa.silver_gpd_payment_option spo
+            JOIN pagopa.silver_gpd_payment_position spp
+              ON spo.after.payment_position_id = spp.after.id
+            WHERE spo.op IN ('c', 'r', 'u')
+              AND spp.op IN ('c', 'r', 'u')
+              AND spo.after.due_date IS NOT NULL
+              AND spp.after.max_due_date IS NOT NULL
+              AND spo.after.due_date > spp.after.max_due_date
+              AND ${INCREMENTAL_CONDITIONS:spo}

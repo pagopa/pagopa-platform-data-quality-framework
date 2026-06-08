@@ -328,3 +328,215 @@ def test_sostituisce_placeholder_dentro_filter_dei_check_nativi():
         "fld__cmp__op__not_null",
         "fld__cmp__ts_ms__not_null",
     }
+
+
+# ---------------------------------------------------------------------------
+# Placeholder qualificato con alias (query con JOIN): ${INCREMENTAL_CONDITIONS:spo}
+# ---------------------------------------------------------------------------
+
+# xref check con anti-join: entrambe le tabelle hanno dl_event_tms, quindi la
+# colonna watermark DEVE essere qualificata con l'alias della tabella driving.
+SODACL_ALIASED = """
+checks for silver_t:
+
+  - failed rows:
+      name: xref__cns__ref_integrity
+      fail query: |
+        SELECT spo.dl_id
+        FROM silver_t spo
+        LEFT JOIN silver_other spp
+          ON spp.after.id = spo.after.ref_id
+        WHERE spp.dl_id IS NULL
+          AND ${INCREMENTAL_CONDITIONS:spo}
+""".strip()
+
+
+def test_sostituzione_aliased_produce_colonna_qualificata():
+    cfg     = _make_config()
+    scan_ts = datetime(2026, 5, 27, 3, 0, 0)
+
+    with patch.object(engine, "_lookup_check_watermark", return_value=None):
+        new_sodacl, per_check_wm = engine._resolve_per_check_watermarks(
+            spark=None,
+            config=cfg,
+            contract=_make_contract(SODACL_ALIASED),
+            scan_ts=scan_ts,
+            watermark_column="dl_event_tms",
+            cli_override=None,
+        )
+
+    spec  = yaml.safe_load(new_sodacl)
+    query = spec["checks for silver_t"][0]["failed rows"]["fail query"]
+
+    assert "${INCREMENTAL_CONDITIONS" not in query
+    assert "spo.dl_event_tms >"  in query
+    assert "spo.dl_event_tms <=" in query
+    # la colonna NON deve comparire nuda (sarebbe ambigua)
+    assert " dl_event_tms >" not in query
+    assert per_check_wm == {"xref__cns__ref_integrity": datetime(1970, 1, 1)}
+
+
+def test_due_check_con_alias_diversi_ricevono_prefissi_distinti():
+    cfg     = _make_config()
+    scan_ts = datetime(2026, 5, 27, 3, 0, 0)
+    sodacl = """
+    checks for silver_t:
+      - failed rows:
+          name: xref_a
+          fail query: |
+            SELECT spo.dl_id FROM silver_t spo JOIN o ON o.id = spo.id
+            WHERE ${INCREMENTAL_CONDITIONS:spo}
+      - failed rows:
+          name: xref_b
+          fail query: |
+            SELECT sgt.dl_id FROM silver_g sgt JOIN o ON o.id = sgt.id
+            WHERE ${INCREMENTAL_CONDITIONS:sgt}
+    """.strip()
+
+    with patch.object(engine, "_lookup_check_watermark", return_value=None):
+        new_sodacl, per_check_wm = engine._resolve_per_check_watermarks(
+            spark=None,
+            config=cfg,
+            contract=_make_contract(sodacl),
+            scan_ts=scan_ts,
+            watermark_column="dl_event_tms",
+            cli_override=None,
+        )
+
+    spec    = yaml.safe_load(new_sodacl)
+    query_a = spec["checks for silver_t"][0]["failed rows"]["fail query"]
+    query_b = spec["checks for silver_t"][1]["failed rows"]["fail query"]
+
+    assert "spo.dl_event_tms >" in query_a
+    assert "sgt." not in query_a
+    assert "sgt.dl_event_tms >" in query_b
+    assert "spo." not in query_b
+    assert set(per_check_wm.keys()) == {"xref_a", "xref_b"}
+
+
+def test_mixed_bare_e_aliased_nello_stesso_campo():
+    """Un campo con DUE placeholder (uno nudo, uno aliased) li risolve entrambi
+    in un solo passaggio, ciascuno secondo il proprio alias."""
+    cfg     = _make_config()
+    scan_ts = datetime(2026, 5, 27, 3, 0, 0)
+    sodacl = """
+    checks for silver_t:
+      - failed rows:
+          name: xref_mixed
+          fail query: |
+            SELECT spo.dl_id FROM silver_t spo
+            WHERE col_x IS NULL AND ${INCREMENTAL_CONDITIONS}
+              AND spo.id IN (
+                SELECT id FROM silver_t spo WHERE ${INCREMENTAL_CONDITIONS:spo}
+              )
+    """.strip()
+
+    with patch.object(engine, "_lookup_check_watermark", return_value=None):
+        new_sodacl, per_check_wm = engine._resolve_per_check_watermarks(
+            spark=None,
+            config=cfg,
+            contract=_make_contract(sodacl),
+            scan_ts=scan_ts,
+            watermark_column="dl_event_tms",
+            cli_override=None,
+        )
+
+    query = yaml.safe_load(new_sodacl)["checks for silver_t"][0]["failed rows"]["fail query"]
+
+    assert "${INCREMENTAL_CONDITIONS" not in query
+    assert " dl_event_tms >" in query        # forma nuda (preceduta da spazio)
+    assert "spo.dl_event_tms >" in query     # forma qualificata
+    assert "xref_mixed" in per_check_wm
+
+
+def test_filter_nativo_aliased_preserva_la_condizione_business():
+    cfg     = _make_config()
+    scan_ts = datetime(2026, 5, 27, 3, 0, 0)
+    sodacl = """
+    checks for silver_t:
+      - missing_count(after.iuv) = 0:
+          name: fld__cmp__iuv__not_null
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS:spo}
+    """.strip()
+
+    with patch.object(engine, "_lookup_check_watermark", return_value=None):
+        new_sodacl, per_check_wm = engine._resolve_per_check_watermarks(
+            spark=None,
+            config=cfg,
+            contract=_make_contract(sodacl),
+            scan_ts=scan_ts,
+            watermark_column="dl_event_tms",
+            cli_override=None,
+        )
+
+    flt = yaml.safe_load(new_sodacl)["checks for silver_t"][0][
+        "missing_count(after.iuv) = 0"
+    ]["filter"]
+
+    assert "op IN ('c', 'r', 'u')" in flt
+    assert "AND spo.dl_event_tms >" in flt
+    assert "${INCREMENTAL_CONDITIONS" not in flt
+
+
+def test_contract_solo_aliased_e_rilevato_come_incrementale():
+    """Prova che _incremental_fields usa la regex e non un match a sottostringa:
+    un contract con SOLO placeholder aliased deve comunque essere processato."""
+    cfg     = _make_config()
+    scan_ts = datetime(2026, 5, 27, 3, 0, 0)
+
+    with patch.object(engine, "_lookup_check_watermark", return_value=None):
+        _, per_check_wm = engine._resolve_per_check_watermarks(
+            spark=None,
+            config=cfg,
+            contract=_make_contract(SODACL_ALIASED),
+            scan_ts=scan_ts,
+            watermark_column="dl_event_tms",
+            cli_override=None,
+        )
+
+    assert "xref__cns__ref_integrity" in per_check_wm
+
+
+def test_alias_malformato_non_matcha_e_resta_nel_sodacl():
+    """Un alias malformato (es. ':a.b' con punto) NON matcha affatto: il token
+    resta verbatim e il check NON e' considerato incrementale (fail-fast a valle
+    sullo scan, mai sostituzione silenziosa/parziale)."""
+    cfg     = _make_config()
+    scan_ts = datetime(2026, 5, 27, 3, 0, 0)
+    sodacl = """
+    checks for silver_t:
+      - failed rows:
+          name: xref_malformato
+          fail query: |
+            SELECT spo.dl_id FROM silver_t spo
+            WHERE ${INCREMENTAL_CONDITIONS:a.b}
+    """.strip()
+
+    with patch.object(engine, "_lookup_check_watermark") as m:
+        new_sodacl, per_check_wm = engine._resolve_per_check_watermarks(
+            spark=None,
+            config=cfg,
+            contract=_make_contract(sodacl),
+            scan_ts=scan_ts,
+            watermark_column="dl_event_tms",
+            cli_override=None,
+        )
+
+    m.assert_not_called()
+    assert per_check_wm == {}
+    assert "${INCREMENTAL_CONDITIONS:a.b}" in new_sodacl
+
+
+def test_guard_regex_rileva_placeholder_solo_aliased():
+    """Regressione del 'trap' della guard: la sottostringa nuda NON e' contenuta
+    in un placeholder aliased, quindi il vecchio check `in` fallirebbe; la regex
+    invece lo rileva correttamente."""
+    sodacl_solo_aliased = (
+        "checks for t:\n  - failed rows:\n      name: x\n"
+        "      fail query: SELECT 1 WHERE ${INCREMENTAL_CONDITIONS:spo}\n"
+    )
+
+    # Il vecchio comportamento (substring) NON rileverebbe il placeholder...
+    assert "${INCREMENTAL_CONDITIONS}" not in sodacl_solo_aliased
+    # ...mentre la regex usata da guard e detection lo rileva.
+    assert engine._INCREMENTAL_RE.search(sodacl_solo_aliased) is not None

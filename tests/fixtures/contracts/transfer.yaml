@@ -11,6 +11,9 @@ info:
     email: andrea.ferracci@pagopa.it
     slack-channel: https://pagopaspa.slack.com/archives/C015HN4UZAM
 
+confluenceSpaces:
+  - PAGOPA
+
 ### servers
 servers:
   production:
@@ -54,7 +57,7 @@ models:
             required: true
             description: Chiave primaria sulla tabella sorgente del transfer
             example: "822999"
-            pii: false        
+            pii: false
           payment_option_id:
             title: FK Opzione di pagamento
             type: int
@@ -125,7 +128,7 @@ models:
             required: true
             description: Chiave primaria sulla tabella sorgente del transfer
             example: "822999"
-            pii: false            
+            pii: false
           payment_option_id:
             title: FK opzione di pagamento
             type: int
@@ -211,7 +214,7 @@ models:
 
 ### schema
 schema:
-  type: avro 
+  type: avro
   specification:
     models:
       - transfer:  |-
@@ -274,7 +277,7 @@ examples:
   - type: json
     model: transfer
     description: Esempio di evento transfer
-    data: |- 
+    data: |-
       {
         "after": {
           "id": 822999,
@@ -306,7 +309,7 @@ examples:
 ### service levels
 servicelevels:
   availability:
-    description: Il servizio è garantito 24/7 
+    description: Il servizio è garantito 24/7
     percentage: 99.9%
   retention:
     description: si tratta di un dato di configurazioe che dipende dalla tipologia della posizione debitoria, varia da 24h a 1 anno
@@ -327,12 +330,12 @@ servicelevels:
   backup:
     description: I dati sono replicati su due region
     recoveryTime: 5m
-    recoveryPoint: 0m 
+    recoveryPoint: 0m
   growth:
     rate: "25000000 record/year"
     size: 11GB
   updates:
-    fields: 
+    fields:
       - after.amount
       - after.category
       - after.transfer_id
@@ -353,42 +356,194 @@ servicelevels:
 quality:
   type: SodaCL
   dataset: pagopa.silver_gpd_transfer
+  xref-dataset:
+    - silver_gpd_payment_option
   specification: |-
     checks for transfer:
-      - row_count > 0
-      - missing_count(op) = 0
-      - missing_count(ts_ms) = 0
-      - missing_count(ts_ns) = 0
-      - missing_count(ts_us) = 0
+
+      # ============================================================
+      # Entity Level (ent__cmp) -- massivo
+      # ============================================================
+      - row_count > 0:
+          name: ent__cmp__dataset__not_empty
+
+      # ============================================================
+      # Completezza Campi Root (fld__cmp) -- incrementale
+      # Nota: ${INCREMENTAL_CONDITIONS} non e' supportato nella clausola
+      # ============================================================
+      - missing_count(op) = 0:
+          name: fld__cmp__op__not_null
+          filter: ${INCREMENTAL_CONDITIONS}
+      - missing_count(ts_ms) = 0:
+          name: fld__cmp__ts_ms__not_null
+          filter: ${INCREMENTAL_CONDITIONS}
+      - missing_count(ts_ns) = 0:
+          name: fld__cmp__ts_ns__not_null
+          filter: ${INCREMENTAL_CONDITIONS}
+      - missing_count(ts_us) = 0:
+          name: fld__cmp__ts_us__not_null
+          filter: ${INCREMENTAL_CONDITIONS}
+
+      # ============================================================
+      # Freschezza (fld__tim) -- massivo
+      # ============================================================
       - freshness(dl_event_tms) < 1d:
-          name: Data is fresh
-      - count_before_delete = 0:
-          name: Validazione before per le operazioni di delete
-          count_before_delete query: |
-            SELECT COUNT(*)
+          name: fld__tim__dl_event_tms__freshness_1d
+
+      # ============================================================
+      # Completezza Campi After (fld__cmp) -- incrementale
+      # ============================================================
+      - missing_count(after.id) = 0:
+          name: fld__cmp__id__not_null
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+      - missing_count(after.payment_option_id) = 0:
+          name: fld__cmp__payment_option_id__not_null
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+      - missing_count(after.amount) = 0:
+          name: fld__cmp__amount__not_null
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+      - missing_count(after.transfer_id) = 0:
+          name: fld__cmp__transfer_id__not_null
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+      - missing_count(after.inserted_date) = 0:
+          name: fld__cmp__inserted_date__not_null
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+      - missing_count(after.iuv) = 0:
+          name: fld__cmp__iuv__not_null
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+      - missing_count(after.organization_fiscal_code) = 0:
+          name: fld__cmp__organization_fiscal_code__not_null
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+      - missing_count(after.status) = 0:
+          name: fld__cmp__status__not_null
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+
+      # ============================================================
+      # Validita' - Enum (fld__vld) -- incrementale
+      # ============================================================
+      - invalid_count(after.status) = 0:
+          name: fld__vld__status__enum
+          valid values: ['T_UNREPORTED', 'T_REPORTED']
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+
+      # ============================================================
+      # Validita' - Pattern P.IVA (fld__vld) -- incrementale
+      # organization_fiscal_code = Ente Creditore, P.IVA 11 cifre.
+      # cf_format DISABILITATO: mutuamente esclusivo con vat_format.
+      # ============================================================
+      - invalid_count(after.organization_fiscal_code) = 0:
+          name: fld__vld__organization_fiscal_code__vat_format
+          valid regex: '^[0-9]{11}$'
+          filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS}
+
+      # ============================================================
+      # Validita' - Formato Importo (fld__vld) -- incrementale
+      # ============================================================
+      - failed rows:
+          name: fld__vld__amount__amount_format
+          fail query: |
+            SELECT dl_id, after.iuv, after.organization_fiscal_code, after.transfer_id, after.amount
             FROM pagopa.silver_gpd_transfer
-            WHERE
-              (op = 'd' AND before.id IS NULL)
-              OR
-              (op = 'd' AND (
-                  before.payment_option_id != 0
-                  OR before.amount != 0
-                  OR before.category != ''
-                  OR before.transfer_id != ''
-                  OR before.inserted_date != 0
-                  OR before.iuv != ''
-                  OR before.organization_fiscal_code != ''
-              ))
-      - count_create_read_update_null = 0:
-          name: Validazione after per operazioni di create, read, and update
-          count_create_read_update_null query: |
-            SELECT COUNT(*)
+            WHERE op IN ('c', 'r', 'u')
+              AND after.amount IS NOT NULL
+              AND after.amount < 0
+              AND ${INCREMENTAL_CONDITIONS}
+
+      # ============================================================
+      # Validita' - Tassonomia (fld__vld) -- placeholder TODO
+      # ============================================================
+      - failed rows:
+          name: fld__vld__category__taxonomy_pattern
+          fail query: |
+            SELECT dl_id, after.iuv, after.organization_fiscal_code, after.transfer_id, after.category
             FROM pagopa.silver_gpd_transfer
-            WHERE op IN ('c','r','u') AND after.id is NULL
-      # DISABLED: known upstream issue, tracking in PIDM-1751 and DLTE-828, ETA 2026-Q2
-      # - unix_timestamp_microseconds_length_inserted_date = 0:
-      #     name: Validazione lunghezza Unix timestamp in microsecondi inserted_date
-      #     unix_timestamp_microseconds_length_inserted_date query: |
-      #       SELECT COUNT(*)
-      #       FROM pagopa.silver_gpd_transfer
-      #       WHERE op IN ('c', 'r', 'u') AND LENGTH(CAST(after.inserted_date AS STRING)) < 16
+            WHERE 1=0 -- TODO: definire regex formato tassonomia (es. 9/0101108TS/)
+      - failed rows:
+          name: fld__vld__category__taxonomy_value
+          fail query: |
+            SELECT dl_id, after.iuv, after.organization_fiscal_code, after.transfer_id, after.category
+            FROM pagopa.silver_gpd_transfer
+            WHERE 1=0 -- TODO: verificare con catalogo tassonomie pagoPA
+
+      # ============================================================
+      # Consistenza Intra-Entity (ent__cns / ent__cmp) -- incrementale
+      # ============================================================
+      - failed rows:
+          name: ent__cns__delete_event__before_fields_cleared
+          fail query: |
+            SELECT dl_id, before.id
+            FROM pagopa.silver_gpd_transfer
+            WHERE (
+                (op = 'd' AND before.id IS NULL)
+                OR
+                (op = 'd' AND (
+                      before.payment_option_id != 0
+                      OR before.amount != 0
+                      OR before.category != ''
+                      OR before.transfer_id != ''
+                      OR before.inserted_date != 0
+                      OR before.iuv != ''
+                      OR before.organization_fiscal_code != ''
+                ))
+              )
+              AND ${INCREMENTAL_CONDITIONS}
+      - failed rows:
+          name: ent__cmp__after_struct__conditional_presence
+          fail query: |
+            SELECT dl_id, op, ts_ms
+            FROM pagopa.silver_gpd_transfer
+            WHERE (
+                (op IN ('c', 'r', 'u') AND after IS NULL)
+                OR (op = 'd' AND after IS NOT NULL)
+              )
+              AND ${INCREMENTAL_CONDITIONS}
+      - failed rows:
+          name: ent__cmp__before_struct__conditional_presence
+          fail query: |
+            SELECT dl_id, op, ts_ms
+            FROM pagopa.silver_gpd_transfer
+            WHERE (
+                (op = 'd' AND before IS NULL)
+                OR (op IN ('c', 'r', 'u') AND before IS NOT NULL)
+              )
+              AND ${INCREMENTAL_CONDITIONS}
+
+      # ============================================================
+      # Unicita' Intra-Entity (ent__unq) -- massivo
+      # ============================================================
+      - failed rows:
+          name: ent__unq__transfer_id_per_payment_option__no_duplicates
+          fail query: |
+            SELECT after.iuv, after.organization_fiscal_code, after.payment_option_id, after.transfer_id, COUNT(*) AS cnt
+            FROM pagopa.silver_gpd_transfer
+            WHERE op IN ('c', 'r', 'u')
+              AND after.payment_option_id IS NOT NULL
+              AND after.transfer_id IS NOT NULL
+            GROUP BY after.iuv, after.organization_fiscal_code, after.payment_option_id, after.transfer_id
+            HAVING COUNT(*) > 1
+
+      # ============================================================
+      # Consistenza Cross-entity (xref__cns)
+      # ============================================================
+      - failed rows:
+          name: xref__cns__payment_option__referential_integrity
+          fail query: |
+            SELECT sgt.dl_id, sgt.after.iuv, sgt.after.organization_fiscal_code, sgt.after.transfer_id, sgt.after.payment_option_id
+            FROM pagopa.silver_gpd_transfer sgt
+            LEFT JOIN pagopa.silver_gpd_payment_option spo
+              ON spo.op IN ('c', 'r', 'u')
+              AND spo.after.id = sgt.after.payment_option_id
+            WHERE sgt.op IN ('c', 'r', 'u')
+              AND spo.dl_id IS NULL
+              AND ${INCREMENTAL_CONDITIONS:sgt}
+      - failed rows:
+          name: xref__cns__transfer__amount_sum_consistency
+          fail query: |
+            SELECT spo.dl_id, spo.after.iuv, spo.after.organization_fiscal_code, spo.after.amount, SUM(sgt.after.amount) AS transfer_amount_sum
+            FROM pagopa.silver_gpd_payment_option spo
+            JOIN pagopa.silver_gpd_transfer sgt
+              ON sgt.after.payment_option_id = spo.after.id
+            WHERE spo.op IN ('c', 'r', 'u')
+              AND sgt.op IN ('c', 'r', 'u')
+            GROUP BY spo.dl_id, spo.after.iuv, spo.after.organization_fiscal_code, spo.after.amount
+            HAVING SUM(sgt.after.amount) != spo.after.amount

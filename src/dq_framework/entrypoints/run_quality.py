@@ -103,7 +103,9 @@ def _parse_args(
             "${INCREMENTAL_CONDITIONS} nelle query SodaCL custom. "
             "Override di AppConfig.default_watermark_column. "
             "Se assente e default non configurato, il framework solleva "
-            "errore se nel SodaCL e' presente il placeholder."
+            "errore se nel SodaCL e' presente il placeholder. "
+            "Per query con JOIN usare ${INCREMENTAL_CONDITIONS:<alias>} per "
+            "qualificare la colonna con la tabella driving (es. :spo)."
         ),
     )
     parser.add_argument(
