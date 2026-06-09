@@ -73,32 +73,69 @@ def _lookup_check_watermark(
         return None
 
 
+def _resolve_ts_literal_kind(
+    spark: SparkSession,
+    dataset: str,
+    watermark_column: str,
+) -> str:
+
+    if spark is None:
+        return "TIMESTAMP"
+    try:
+        safe_ds = ".".join(f"`{p}`" for p in dataset.split("."))
+        simple = spark.table(safe_ds).schema[watermark_column].dataType.simpleString()
+    except Exception as e:
+        logger.warning(
+            f"Tipo della colonna watermark '{watermark_column}' non risolvibile "
+            f"su '{dataset}' ({e}); uso il literal TIMESTAMP (LTZ) di default."
+        )
+        return "TIMESTAMP"
+
+    if simple == "timestamp_ntz":
+        return "TIMESTAMP_NTZ"
+    if simple == "timestamp":
+        return "TIMESTAMP"
+
+    logger.warning(
+        f"Colonna watermark '{watermark_column}' su '{dataset}' ha tipo inatteso "
+        f"'{simple}' (atteso timestamp/timestamp_ntz); uso TIMESTAMP di default, "
+        f"verificare il partition pruning sul piano fisico."
+    )
+    return "TIMESTAMP"
+
+
 def _build_incremental_conditions(
     watermark_column: str,
     wm_from: datetime,
     wm_to: datetime,
     alias: Optional[str] = None,
+    ts_kind: str = "TIMESTAMP",
 ) -> str:
     """Genera la clausola SQL da sostituire al placeholder.
 
     Forma esatta (estremo sinistro escluso, destro incluso):
-        <col> > TIMESTAMP 'YYYY-MM-DD HH:MM:SS.ffffff'
-          AND <col> <= TIMESTAMP 'YYYY-MM-DD HH:MM:SS.ffffff'
+        <col> > <ts_kind> 'YYYY-MM-DD HH:MM:SS.ffffff'
+          AND <col> <= <ts_kind> 'YYYY-MM-DD HH:MM:SS.ffffff'
 
     Se `alias` e' valorizzato, la colonna viene qualificata (`<alias>.<col>`):
     indispensabile nelle query con JOIN dove piu' tabelle espongono la stessa
     colonna watermark. Con `alias=None` l'output e' identico alla forma nuda
     (retrocompatibilita' totale).
 
-    I literal TIMESTAMP con microsecondi sono pushdown-friendly su Iceberg via
-    Catalyst, e su tabelle partizionate per `DAY(<col>)` permettono partition
-    pruning aggressivo.
+    `ts_kind` e' la keyword del literal timestamp ("TIMESTAMP" oppure
+    "TIMESTAMP_NTZ") e DEVE combaciare col tipo Spark della colonna watermark
+    (risolto da `_resolve_ts_literal_kind`). Il pushdown su Iceberg avviene SOLO
+    se il predicato e' nella forma `<col> <op> <literal>` senza cast: un literal
+    di variante sbagliata (es. `TIMESTAMP` su colonna `TIMESTAMP_NTZ`) fa
+    inserire a Catalyst un `cast(<col> AS ...)` che disabilita il partition
+    pruning su `DAY(<col>)` e trasforma l'incrementale in un full scan. Default
+    "TIMESTAMP" per retrocompatibilita'.
     """
     fmt = "%Y-%m-%d %H:%M:%S.%f"
     col = f"{alias}.{watermark_column}" if alias else watermark_column
     return (
-        f"{col} > TIMESTAMP '{wm_from.strftime(fmt)}' "
-        f"AND {col} <= TIMESTAMP '{wm_to.strftime(fmt)}'"
+        f"{col} > {ts_kind} '{wm_from.strftime(fmt)}' "
+        f"AND {col} <= {ts_kind} '{wm_to.strftime(fmt)}'"
     )
 
 
@@ -160,6 +197,12 @@ def _resolve_per_check_watermarks(
     if not isinstance(spec_dict, dict):
         # SodaCL malformato o vuoto: niente da fare
         return contract["sodacl"], per_check_wm
+
+    # Variante del literal timestamp allineata al tipo della colonna watermark
+    # (vedi _resolve_ts_literal_kind): senza, su colonne TIMESTAMP_NTZ il
+    # predicato verrebbe castato e Iceberg non prunerebbe le partizioni (full
+    # scan). Risolto una volta sola per contract.
+    ts_kind = _resolve_ts_literal_kind(spark, contract["dataset"], watermark_column)
 
     for key in spec_dict:
         if not isinstance(key, str) or not key.startswith("checks for "):
@@ -223,9 +266,9 @@ def _resolve_per_check_watermarks(
                 # puo' quindi contenere piu' placeholder, ciascuno con (o senza)
                 # alias, sostituiti in un solo passaggio. wm_from e' legato come
                 # default-arg per evitare il late-binding del loop.
-                def _sub(m, _wm_from=wm_from):
+                def _sub(m, _wm_from=wm_from, _ts_kind=ts_kind):
                     return _build_incremental_conditions(
-                        watermark_column, _wm_from, scan_ts, m.group(1)
+                        watermark_column, _wm_from, scan_ts, m.group(1), _ts_kind
                     )
 
                 for field in target_fields:
@@ -534,7 +577,9 @@ def run_pipeline(
     # --- Sezione incrementale ------------------------------------------------
     # Se il SodaCL contiene il placeholder, il framework risolve per-check il
     # watermark_from e sostituisce monoliticamente il placeholder con la
-    # clausola SQL "<col> > TIMESTAMP '...' AND <col> <= TIMESTAMP '...'".
+    # clausola SQL "<col> > <TS> '...' AND <col> <= <TS> '...'", dove <TS> e'
+    # TIMESTAMP o TIMESTAMP_NTZ a seconda del tipo della colonna watermark
+    # (allineamento necessario al pushdown/partition-pruning Iceberg).
     # wm_to e' uguale per tutti i check incrementali (= scan_ts).
     per_check_wm: dict[str, datetime] = {}
     effective_watermark_column: Optional[str] = None

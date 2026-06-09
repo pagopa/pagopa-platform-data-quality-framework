@@ -76,3 +76,41 @@ def test_alias_none_e_byte_identico_alla_forma_nuda():
         "dl_event_tms", wm_from, wm_to, alias=None
     )
     assert nudo == none_arg
+
+
+def test_ts_kind_default_e_timestamp():
+    """Senza ts_kind esplicito l'output usa TIMESTAMP (retrocompatibilita')."""
+    cond = _build_incremental_conditions(
+        "dl_event_tms", datetime(2026, 5, 24), datetime(2026, 5, 25)
+    )
+    assert " > TIMESTAMP '"  in cond
+    assert " <= TIMESTAMP '" in cond
+    assert "TIMESTAMP_NTZ" not in cond
+
+
+def test_ts_kind_ntz_emette_literal_timestamp_ntz():
+    """Su colonne TIMESTAMP_NTZ il literal deve combaciare per evitare il cast
+    che disabilita il partition pruning Iceberg."""
+    cond = _build_incremental_conditions(
+        "dl_event_tms",
+        datetime(2026, 5, 24, 3, 0, 0, 123456),
+        datetime(2026, 5, 27, 3, 0, 0, 654321),
+        ts_kind="TIMESTAMP_NTZ",
+    )
+    assert cond == (
+        "dl_event_tms > TIMESTAMP_NTZ '2026-05-24 03:00:00.123456' "
+        "AND dl_event_tms <= TIMESTAMP_NTZ '2026-05-27 03:00:00.654321'"
+    )
+
+
+def test_ts_kind_si_combina_con_alias():
+    """ts_kind e alias sono ortogonali: entrambi applicati insieme."""
+    cond = _build_incremental_conditions(
+        "dl_event_tms",
+        datetime(2026, 5, 24),
+        datetime(2026, 5, 25),
+        alias="spo",
+        ts_kind="TIMESTAMP_NTZ",
+    )
+    assert cond.startswith("spo.dl_event_tms > TIMESTAMP_NTZ '")
+    assert "AND spo.dl_event_tms <= TIMESTAMP_NTZ '" in cond
