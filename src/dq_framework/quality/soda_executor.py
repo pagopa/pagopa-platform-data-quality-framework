@@ -16,8 +16,10 @@ logger = logging.getLogger(__name__)
 
 class MemorySampler(Sampler):
     """Custom Sampler iper-difensivo per estrarre failed rows da Soda in RAM senza errori."""
-    def __init__(self):
+    
+    def __init__(self, limit: int = 100):
         self.failed_data = {}
+        self.limit = limit 
 
     def store_sample(self, *args, **kwargs) -> SampleRef:
         if "sample_context" in kwargs:
@@ -41,7 +43,6 @@ class MemorySampler(Sampler):
                 if hasattr(schema, 'columns'):
                     cols = [c.name if hasattr(c, 'name') else c.get('name') for c in schema.columns]
                 elif hasattr(schema, 'get_dict'):
-                    # Fallback al dizionario serializzato
                     d = schema.get_dict()
                     if 'columns' in d:
                         cols = [c.get('name') for c in d['columns']]
@@ -50,7 +51,9 @@ class MemorySampler(Sampler):
                     cols = [f"col_{i}" for i in range(len(rows[0]))]
 
                 if rows:
-                    list_of_dicts = [dict(zip(cols, r)) for r in rows]
+                    safe_rows = rows[:self.limit]
+                    
+                    list_of_dicts = [dict(zip(cols, r)) for r in safe_rows]
                     self.failed_data[check_name] = list_of_dicts
                 
         except Exception as e:
@@ -63,7 +66,7 @@ class MemorySampler(Sampler):
             name=sample_name,
             schema=schema,
             total_row_count=row_count,
-            stored_row_count=row_count,
+            stored_row_count=len(self.failed_data.get(check_name, [])),
             type="failed_rows"
         )
 
