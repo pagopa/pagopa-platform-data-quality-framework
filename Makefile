@@ -7,7 +7,7 @@ lint:
 	flake8 .
 
 run-dev:
-	python ./tests/mock_data_setup.py && ENV=dev python -m dq_framework.entrypoints.run_quality
+	python ./tests/mock_data_setup.py && ENV=dev python -m dq_framework.entrypoints.run_quality --watermark-from 1970-01-01
 
 run-dev-github:
 	python ./tests/mock_data_setup.py && ENV=dev-github python -m dq_framework.entrypoints.run_quality

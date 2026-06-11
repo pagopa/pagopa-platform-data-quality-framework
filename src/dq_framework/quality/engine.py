@@ -445,6 +445,88 @@ def _ensure_failed_records_table(spark: SparkSession, config: AppConfig, fqn: st
     ddl = _FAILED_RECORDS_TABLE_DDL.format(fqn=fqn, location_clause=failed_loc_clause)
     spark.sql(ddl)
 
+def _extract_and_clean_failed_queries(sodacl_yaml: str) -> tuple[str, dict[str, dict]]:
+    """
+    Legge il SodaCL, estrae la chiave 'failed query fields' e la elimina per non 
+    mandare in errore l'engine di Soda. Salva le query base e i campi per 
+    l'esecuzione differita in caso di fallimento del check.
+    """
+    spec_dict = yaml.safe_load(sodacl_yaml)
+    extracted = {}
+
+    if not isinstance(spec_dict, dict):
+        return sodacl_yaml, extracted
+
+    for key in spec_dict:
+        if not isinstance(key, str) or not key.startswith("checks for "):
+            continue
+        
+        check_list = spec_dict[key]
+        if not isinstance(check_list, list):
+            continue
+
+        for check_item in check_list:
+            if not isinstance(check_item, dict):
+                continue
+
+            for check_type, check_body in check_item.items():
+                if not isinstance(check_body, dict):
+                    continue
+
+                if "failed query fields" in check_body:
+                    fields = check_body.pop("failed query fields")
+                    check_name = check_body.get("name")
+                    
+                    # Cerca la chiave della query massiva (es: 'mio_check query')
+                    query_key = next((k for k in check_body if isinstance(k, str) and k.endswith(" query")), None)
+                    if query_key and check_name:
+                        extracted[check_name] = {
+                            "query": check_body[query_key],
+                            "fields": fields
+                        }
+
+    # Ricrea l'YAML pulito per Soda
+    cleaned_yaml = yaml.safe_dump(spec_dict, sort_keys=False, allow_unicode=True)
+    return cleaned_yaml, extracted
+
+
+def _run_manual_failed_queries(spark: SparkSession, all_rows: list[Row], extracted_queries: dict, sampler):
+    """
+    Per ogni check fallito, recupera la sua 'SELECT COUNT(*)' originale,
+    la trasforma sostituendo la COUNT con i 'failed query fields' e la esegue.
+    Inserisce poi i risultati nel Sampler di Soda affinché vengano scritti su Iceberg.
+    """
+    for row in all_rows:
+        # Se il check ha fallito e fa parte di quelli per cui abbiamo estratto la query custom
+        if row.has_failed_records and row.check_name in extracted_queries:
+            q_info = extracted_queries[row.check_name]
+            base_query = q_info["query"]
+            fields = q_info["fields"]
+
+            # Tramite RegEx sostituiamo 'SELECT COUNT(*)' con 'SELECT campo1, campo2'
+            # (Case-insensitive, gestisce varianti di spaziatura e anche COUNT(1))
+            mod_query = re.sub(
+                r'(?i)^\s*SELECT\s+COUNT\s*\(\s*(\*|1)\s*\)',
+                f"SELECT {fields}",
+                base_query,
+                count=1
+            )
+
+            # Aggiungiamo un limite massimo in ottica difensiva
+            mod_query += "\nLIMIT 100"
+
+            try:
+                logger.info(f"Esecuzione manuale failed query per check {row.check_name} : {mod_query}")
+                failed_df = spark.sql(mod_query)
+                
+                # Convertiamo il DataFrame PySpark in dizionari Python 
+                # compatibili con il MemorySampler
+                failed_records = [r.asDict() for r in failed_df.collect()]
+                sampler.failed_data[row.check_name] = failed_records
+                
+            except Exception as e:
+                logger.error(f"Errore nell'esecuzione della failed query differita per '{row.check_name}': {e}")
+
 
 def _get_nested_value(record, path):
     """Recupera campi annidati (es: 'after.status') navigando dizionari e oggetti PySpark Row."""
@@ -537,7 +619,8 @@ def _process_and_write_failed_records(spark: SparkSession, rows: list[Row], samp
         
         df_failed = spark.createDataFrame(failed_rows_list, schema=schema)
 
-        #print(df_failed.show(100, truncate=False))
+        print(df_failed.show(100, truncate=False))
+        
 
         logger.info(f"Scrittura di {df_failed.count()} record di dettaglio fallimenti su tabella Iceberg operazionale: {fqn}")
         try:
@@ -617,6 +700,10 @@ def run_pipeline(
         contract["sodacl"] = new_sodacl
     # --- Fine sezione incrementale -------------------------------------------
 
+    # Estraiamo i "failed query fields" e puliamo l'YAML DOPO aver sostituito i watermark, 
+    # affinché la query da eseguire in Spark abbia le date correttamente valorizzate.
+    contract["sodacl"], extracted_queries = _extract_and_clean_failed_queries(contract["sodacl"])
+
     # 1. Esecuzione tramite Soda / PySpark (ora intercettiamo anche il Sampler in memoria)
     logger.info(f"Esecuzione run_dataframe_soda_scan tramite Soda / PySpark")
     soda_checks, total_rows, sampler = run_dataframe_soda_scan(spark, contract, config)
@@ -649,6 +736,9 @@ def run_pipeline(
         
         # Scrittura su DB 1: Tabella aggregata (Results)
         _write_results_to_iceberg(spark, df_results, config)
+
+        if extracted_queries:
+            _run_manual_failed_queries(spark, all_rows, extracted_queries, sampler)
         
         # Scrittura su DB 2: Tabella operativa di dettaglio (Failed records) intercettati
         _process_and_write_failed_records(spark, all_rows, sampler, config)
