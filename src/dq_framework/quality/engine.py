@@ -737,6 +737,7 @@ def run_pipeline(
         # Scrittura su DB 1: Tabella aggregata (Results)
         _write_results_to_iceberg(spark, df_results, config)
 
+
         if extracted_queries:
             _run_manual_failed_queries(spark, all_rows, extracted_queries, sampler)
         

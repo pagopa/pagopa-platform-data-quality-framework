@@ -754,3 +754,68 @@ quality:
               AND ${INCREMENTAL_CONDITIONS}
           failed query fields: dl_id, after.iupd, after.id, after.fiscal_code, after.organization_fiscal_code
           name: ent__cns__fiscal_code__creditor_debtor_coherence
+
+      # ============================================================
+      # Unicita' Intra-Entity (ent__unq) -- massivo
+      # (NB: la GROUP BY e' wrappata in una subquery affinche' la 
+      # count(*) esterna conti il numero di "gruppi" violati)
+      # ============================================================
+      - ent__unq__iupd_org_fiscal_code__no_duplicates = 0:
+          ent__unq__iupd_org_fiscal_code__no_duplicates query: |
+            SELECT COUNT(*)
+            FROM (
+              SELECT after.iupd, after.organization_fiscal_code, COUNT(*) AS cnt
+              FROM pagopa.silver_gpd_payment_position
+              WHERE op IN ('c', 'r', 'u')
+                AND after.iupd IS NOT NULL
+                AND after.organization_fiscal_code IS NOT NULL
+              GROUP BY after.iupd, after.organization_fiscal_code
+              HAVING COUNT(*) > 1
+            ) AS sub
+          failed query fields: sub.iupd, sub.organization_fiscal_code, sub.cnt
+          name: ent__unq__iupd_org_fiscal_code__no_duplicates
+
+      # ============================================================
+      # Consistenza Cross-entity (xref__cns)
+      # NOT EXISTS riscritto come LEFT JOIN ... IS NULL (workaround Spark STRUCT issue).
+      # ============================================================
+      - xref__cns__payment_position__referential_integrity = 0:
+          xref__cns__payment_position__referential_integrity query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_option spo
+            LEFT JOIN pagopa.silver_gpd_payment_position spp
+              ON spp.op IN ('c', 'r', 'u')
+              AND spp.after.id = spo.after.payment_position_id
+            WHERE spo.op IN ('c', 'r', 'u')
+              AND spp.dl_id IS NULL
+              AND ${INCREMENTAL_CONDITIONS:spo}
+          failed query fields: spo.dl_id, spo.after.iuv, spo.after.organization_fiscal_code, spo.after.payment_position_id
+          name: xref__cns__payment_position__referential_integrity
+
+      - xref__cns__payment_option__fiscal_code_coherence = 0:
+          xref__cns__payment_option__fiscal_code_coherence query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_position spp
+            JOIN pagopa.silver_gpd_payment_option spo
+              ON spo.after.payment_position_id = spp.after.id
+            WHERE spp.op IN ('c', 'r', 'u')
+              AND spo.op IN ('c', 'r', 'u')
+              AND spp.after.fiscal_code = spo.after.organization_fiscal_code
+              AND ${INCREMENTAL_CONDITIONS:spp}
+          failed query fields: spp.dl_id, spp.after.iupd, spp.after.fiscal_code, spo.after.organization_fiscal_code
+          name: xref__cns__payment_option__fiscal_code_coherence
+
+      - xref__cns__due_dates__temporal_sequence = 0:
+          xref__cns__due_dates__temporal_sequence query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_option spo
+            JOIN pagopa.silver_gpd_payment_position spp
+              ON spo.after.payment_position_id = spp.after.id
+            WHERE spo.op IN ('c', 'r', 'u')
+              AND spp.op IN ('c', 'r', 'u')
+              AND spo.after.due_date IS NOT NULL
+              AND spp.after.max_due_date IS NOT NULL
+              AND spo.after.due_date > spp.after.max_due_date
+              AND ${INCREMENTAL_CONDITIONS:spo}
+          failed query fields: spo.dl_id, spo.after.iuv, spo.after.organization_fiscal_code, spo.after.due_date, spp.after.max_due_date
+          name: xref__cns__due_dates__temporal_sequence
