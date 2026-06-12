@@ -513,7 +513,7 @@ def _run_manual_failed_queries(spark: SparkSession, all_rows: list[Row], extract
             )
 
             # Aggiungiamo un limite massimo in ottica difensiva
-            mod_query += "\nLIMIT 100"
+            mod_query += "\nLIMIT 5"
 
             try:
                 logger.info(f"Esecuzione manuale failed query per check {row.check_name} : {mod_query}")
@@ -529,21 +529,49 @@ def _run_manual_failed_queries(spark: SparkSession, all_rows: list[Row], extract
 
 
 def _get_nested_value(record, path):
-    """Recupera campi annidati (es: 'after.status') navigando dizionari e oggetti PySpark Row."""
+    """Recupera campi annidati gestendo in modo ricorsivo sia i dict Python che i Row PySpark."""
     if record is None:
         return None
-    parts = path.split('.')
-    val = record
-    for p in parts:
-        # Se incappiamo in una Row di PySpark, la convertiamo in dict per sicurezza
-        if hasattr(val, "asDict"):
-            val = val.asDict()
-            
-        if isinstance(val, dict):
-            val = val.get(p)
+
+    def _to_dict(obj):
+        if hasattr(obj, "asDict"):
+            return obj.asDict(recursive=True)
+        elif isinstance(obj, dict):
+            return {k: _to_dict(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [_to_dict(v) for v in obj]
         else:
-            return None
-    return val
+            return obj
+
+    # Assicuriamoci di lavorare solo con dizionari Python puri
+    clean_record = _to_dict(record)
+    
+    if not isinstance(clean_record, dict):
+        return None
+
+    # TENTATIVO 1: Match letterale esatto (Es: la colonna si chiama "after.id")
+    if path in clean_record:
+        return clean_record[path]
+
+    # TENTATIVO 2: Navigazione gerarchica classica (Es: clean_record["after"]["id"])
+    parts = path.split('.')
+    val = clean_record
+    for p in parts:
+        if isinstance(val, dict) and p in val:
+            val = val[p]
+        else:
+            val = None
+            break
+            
+    if val is not None:
+        return val
+
+    # TENTATIVO 3: Fallback sul nome "foglia" (Es: cerca "id" invece di "after.id")
+    leaf_name = parts[-1]
+    if leaf_name in clean_record:
+        return clean_record[leaf_name]
+        
+    return None
 
 
 def _process_and_write_failed_records(spark: SparkSession, rows: list[Row], sampler, config: AppConfig):
@@ -584,10 +612,11 @@ def _process_and_write_failed_records(spark: SparkSession, rows: list[Row], samp
                     failed_value = json.dumps({col_name: val}, default=str)
                 else:
                     # Gestione DINAMICA per ent__ e xref__
-                    # Preleviamo tutte le colonne restituite dalla fail query ESCLUSE le Primary Key
+                    pk_leafs = [pk.split('.')[-1] for pk in pk_cols]
+                    
                     offending_fields = {
                         k: v for k, v in rec.items() 
-                        if k not in pk_cols
+                        if k not in pk_cols and k not in pk_leafs
                     }
                     
                     # Salviamo nel JSON solo se l'utente ha fatto una SELECT mirata (max 10 campi)
@@ -619,7 +648,7 @@ def _process_and_write_failed_records(spark: SparkSession, rows: list[Row], samp
         
         df_failed = spark.createDataFrame(failed_rows_list, schema=schema)
 
-        print(df_failed.show(100, truncate=False))
+        #print(df_failed.show(100, truncate=False))
         
 
         logger.info(f"Scrittura di {df_failed.count()} record di dettaglio fallimenti su tabella Iceberg operazionale: {fqn}")
