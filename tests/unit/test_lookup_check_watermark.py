@@ -7,12 +7,11 @@ Verifica:
 """
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import datetime
 from unittest.mock import MagicMock
 
 from dq_framework.common.config.base import AppConfig
-from dq_framework.quality.engine import _lookup_check_watermark
+from dq_framework.quality.utils.incremental import _lookup_check_watermark
 
 
 def _make_config() -> AppConfig:

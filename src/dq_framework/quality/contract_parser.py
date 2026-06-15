@@ -1,98 +1,37 @@
+"""Parsing del Data Contract: trasformazioni pure (niente I/O, niente Spark).
+
+L'I/O vive in `contract_reader`. Qui estraiamo metadati, dataset e SodaCL dal
+documento YAML, normalizziamo i nomi tabella per Spark ed esponiamo
+`extract_and_clean_failed_queries` per la gestione delle failed-query differite.
+"""
+
 from __future__ import annotations
 
-import base64
 import logging
 import os
 import re
-import sys
-import tempfile
 
-import requests
 import yaml
 
 from dq_framework.common.config import AppConfig
-from dq_framework.common import secrets
+from .contract_reader import read_contract_doc
 
 logger = logging.getLogger(__name__)
 
 
-_GITHUB_API_HEADERS = {
-    "Accept": "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
-}
-
-
-def _fetch_from_github(
-    repository: str,
-    ref: str,
-    filepath: str,
-    config: AppConfig,
-) -> str:
-    """Scarica un file dal repo GitHub via Contents API e lo salva in un file temp. Ritorna il path temp."""
-    try:
-        owner, repo = repository.split("/", 1)
-    except ValueError as exc:
-        raise RuntimeError(
-            f"Repository '{repository}' non valido: atteso formato 'owner/repo'."
-        ) from exc
-
-    api_url = f"{config.github_api_base_url}/repos/{owner}/{repo}/contents/{filepath}"
-
-    token = secrets.github_token()
-    headers = dict(_GITHUB_API_HEADERS)
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    else:
-        logger.warning("GITHUB_TOKEN non impostato: il download fallirà su repo privati.")
-
-    logger.info(f"Download Data Contract via GitHub API: {api_url} (ref={ref})")
-    response = requests.get(api_url, headers=headers, params={"ref": ref}, timeout=10)
-
-    if response.status_code == 401:
-        raise RuntimeError("Download fallito: GITHUB_TOKEN mancante o non valido (401 Unauthorized).")
-    if response.status_code == 403:
-        raise RuntimeError(
-            "Download fallito: accesso negato (403 Forbidden). "
-            "Verificare che GITHUB_TOKEN abbia i permessi 'Contents: Read' sul repo."
-        )
-    if response.status_code == 404:
-        raise RuntimeError(f"Download fallito: file non trovato (404). Verificare URL e permessi: {api_url}")
-    response.raise_for_status()
-
-    payload = response.json()
-    if payload.get("encoding") != "base64":
-        raise RuntimeError(f"Encoding inatteso dalla GitHub API: {payload.get('encoding')!r}")
-
-    content = base64.b64decode(payload["content"]).decode("utf-8")
-
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".yaml", mode="w", encoding="utf-8")
-    tmp.write(content)
-    tmp.close()
-    logger.info(f"Contract scaricato in file temporaneo: {tmp.name}")
-    return tmp.name
-
-
-def _resolve_contract_path(
-    contract_path: str,
-    repository: str,
-    ref: str,
-    config: AppConfig,
-) -> str:
-    """Restituisce un path locale leggibile.
-
-    - Se `repository` è vuoto → `contract_path` è un path locale: viene restituito così com'è.
-    - Altrimenti → `contract_path` è repo-relativo e viene scaricato via GitHub API.
-    """
-    if not repository:
-        return contract_path
-    return _fetch_from_github(repository, ref, contract_path, config)
-
-
-
-
-
 def _normalize_sodacl(sodacl: str, dataset: str, table_name: str, xref_datasets: list[str]) -> str:
-    """Assicura che il nome tabella in SodaCL corrisponda alla vista temporanea Spark, inclusi i dataset di xref."""
+    """Allinea i nomi tabella del SodaCL alle temp view Spark.
+
+    Tre trasformazioni:
+      1. riscrive l'header ``checks for <x>:`` in ``checks for <table_name>:``;
+      2. sostituisce ovunque la stringa ``dataset`` con ``table_name``;
+      3. per ogni xref rimuove il prefisso DB (``db.tabella`` -> ``tabella``) e
+         mappa al leaf normalizzato.
+
+    NB: la sostituzione (2)/(3) è un replace testuale: se un leaf xref è
+    sottostringa del nome tabella principale può sovra-sostituire. Comportamento
+    storico preservato; tenerlo presente estendendo le regole.
+    """
     # 1. Normalizzazione tabella principale
     normalized = re.sub(
         r"checks for [^\s:]+:",
@@ -100,20 +39,74 @@ def _normalize_sodacl(sodacl: str, dataset: str, table_name: str, xref_datasets:
         sodacl,
     )
     normalized = normalized.replace(dataset, table_name)
-    
-    # 2. Normalizzazione tabelle xref (Rimozione DB prefix)
+
+    # 2. Normalizzazione tabelle xref (rimozione prefisso DB)
     for xref in xref_datasets:
         xref_table_name = xref.split(".")[-1].replace("-", "_")
-        
-        # Se l'utente ha scritto "pagopa.nome_tabella" nella query ma "nome_tabella" in xref,
-        # questa regex rimuove qualsiasi prefisso (es: db.schema.tabella -> tabella)
+        # Rimuove qualsiasi prefisso (es. db.schema.tabella -> tabella)
         pattern = r'\b[a-zA-Z0-9_]+\.' + re.escape(xref_table_name) + r'\b'
         normalized = re.sub(pattern, xref_table_name, normalized)
-        
-        # Sostituzione base per sicurezza
         normalized = normalized.replace(xref, xref_table_name)
-        
+
     return normalized
+
+
+def extract_and_clean_failed_queries(sodacl_yaml: str) -> tuple[str, dict[str, dict]]:
+    """Estrae i 'failed query fields' dal SodaCL e li rimuove dallo YAML.
+
+    Soda non conosce la chiave 'failed query fields': la togliamo per non far
+    fallire l'engine e salviamo (query massiva + campi) per l'esecuzione
+    differita sulle righe fallite. Va invocata DOPO la sostituzione watermark,
+    così la query salvata ha già i timestamp risolti.
+
+    Ritorna `(cleaned_yaml, extracted)` dove `extracted` è
+    `{check_name: {"query": ..., "fields": ...}}`.
+    """
+    spec_dict = yaml.safe_load(sodacl_yaml)
+    extracted: dict[str, dict] = {}
+
+    if not isinstance(spec_dict, dict):
+        return sodacl_yaml, extracted
+
+    for key in spec_dict:
+        if not isinstance(key, str) or not key.startswith("checks for "):
+            continue
+
+        check_list = spec_dict[key]
+        if not isinstance(check_list, list):
+            continue
+
+        for check_item in check_list:
+            if not isinstance(check_item, dict):
+                continue
+
+            for check_type, check_body in check_item.items():
+                if not isinstance(check_body, dict):
+                    continue
+
+                if "failed query fields" not in check_body:
+                    continue
+
+                fields = check_body.pop("failed query fields")
+                check_name = check_body.get("name")
+                # Chiave della query massiva (es. 'mio_check query')
+                query_key = next(
+                    (k for k in check_body if isinstance(k, str) and k.endswith(" query")),
+                    None,
+                )
+
+                if not (check_name and query_key and isinstance(fields, str) and fields.strip()):
+                    logger.warning(
+                        f"'failed query fields' ignorato: name/query/fields mancanti o "
+                        f"vuoti (check='{check_name}', query_key={query_key!r})."
+                    )
+                    continue
+
+                extracted[check_name] = {"query": check_body[query_key], "fields": fields}
+
+    cleaned_yaml = yaml.safe_dump(spec_dict, sort_keys=False, allow_unicode=True)
+    return cleaned_yaml, extracted
+
 
 def parse_contract_file(
     contract_path: str,
@@ -121,47 +114,34 @@ def parse_contract_file(
     ref: str,
     config: AppConfig,
 ) -> dict | None:
-    """Legge il file YAML del Data Contract ed estrae la specifica SodaCL dal blocco 'quality'."""
-    try:
-        filepath = _resolve_contract_path(contract_path, repository, ref, config)
-    except RuntimeError as e:
-        logger.error(str(e))
+    """Legge il Data Contract ed estrae la specifica SodaCL dal blocco 'quality'."""
+    filepath, doc = read_contract_doc(contract_path, repository, ref, config)
+    if doc is None:
         return None
 
     try:
-        # Leggiamo il file come un normale dizionario YAML
-        with open(filepath, "r", encoding="utf-8") as f:
-            doc = yaml.safe_load(f)
-            
-        logger.info(f"Lettura YAML da {filepath} riuscita con successo!")
-        
-        # 1. Estrazione metadati base
         info = doc.get("info", {})
         contract_title = info.get("title", os.path.basename(filepath))
         contract_version = str(info.get("version", "1.0"))
-        
-        # 2. Ricerca del blocco "quality"
+
         quality_block = doc.get("quality", {})
         if not quality_block or quality_block.get("type") != "SodaCL":
             logger.error(f"File saltato '{filepath}': manca il blocco 'quality' di tipo 'SodaCL'.")
             return None
-            
-        # 3. Estrazione dataset e stringa SodaCL pura
+
         dataset = quality_block.get("dataset", "")
         raw_sodacl = quality_block.get("specification", "")
-        
+
         xref_datasets_raw = quality_block.get("xref-dataset", [])
         xref_datasets = xref_datasets_raw if isinstance(xref_datasets_raw, list) else [xref_datasets_raw]
-        
+
         if not dataset or not raw_sodacl:
             logger.error(f"File saltato '{filepath}': 'dataset' o 'specification' mancanti nel blocco 'quality'.")
             return None
-            
-        # Calcoliamo il nome della tabella in base al dataset
-        table_name = dataset.split(".")[-1].replace("-", "_")
 
-        # 4. Recupero eventuali check Impala custom
-        impala_quality_checks = doc.get("custom_impala_quality", [])
+        # table_name = leaf del dataset con '-' -> '_': diventa il nome di una temp
+        # view Spark usata come identificatore SQL non quotato, che non ammette trattini.
+        table_name = dataset.split(".")[-1].replace("-", "_")
 
         normalized_sodacl = _normalize_sodacl(raw_sodacl, dataset, table_name, xref_datasets)
 
@@ -179,5 +159,4 @@ def parse_contract_file(
         "table_name":       table_name,
         "xref_datasets":    xref_datasets,
         "sodacl":           normalized_sodacl,
-        "impala_checks":    impala_quality_checks,
     }

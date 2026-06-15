@@ -14,8 +14,10 @@ Viene marcato come `integration` per consentirne lo skip in CI veloce.
 """
 from __future__ import annotations
 
-import os
-from dataclasses import replace
+# Gli import pyspark/dq_framework stanno DOPO pytest.importorskip (vedi sotto),
+# quindi E402 è atteso e va ignorato a livello di file.
+# ruff: noqa: E402
+
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -27,7 +29,6 @@ pyspark = pytest.importorskip("pyspark")
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, lit, struct
 from pyspark.sql.types import (
-    BooleanType,
     IntegerType,
     LongType,
     StringType,
@@ -180,14 +181,14 @@ def test_pipeline_incrementale_due_run_consecutive(spark, setup_source_table, mo
         fqn = f"{config_.results_database}.{config_.results_table}"
         df_results.write.mode("append").format("parquet").saveAsTable(fqn)
 
-    monkeypatch.setattr(engine, "_write_results_to_iceberg", fake_write_results)
+    monkeypatch.setattr(engine, "write_results_to_iceberg", fake_write_results)
 
     # _process_and_write_failed_records crea/scrive la tabella failed_records via
     # Iceberg (CREATE TABLE ... USING iceberg + writeTo.append), non disponibile
     # in locale. Il test verifica il flusso watermark, non la persistenza dei
     # failed-record: lo rendiamo no-op.
     monkeypatch.setattr(
-        engine, "_process_and_write_failed_records", lambda *a, **k: None
+        engine, "process_and_write_failed_records", lambda *a, **k: None
     )
 
     # `run_pipeline` chiama `spark.stop()` alla fine. Nel test la SparkSession

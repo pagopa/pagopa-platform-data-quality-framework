@@ -18,7 +18,7 @@ import pytest
 import yaml
 
 from dq_framework.common.config.base import AppConfig
-from dq_framework.quality import engine
+from dq_framework.quality.utils import incremental
 
 
 # ---------------------------------------------------------------------------
@@ -48,7 +48,6 @@ def _make_contract(sodacl: str, table_name: str = "silver_t") -> dict:
         "dataset":          f"pagopa.{table_name}",
         "table_name":       table_name,
         "sodacl":           sodacl,
-        "impala_checks":    [],
     }
 
 
@@ -106,12 +105,12 @@ def test_sostituisce_solo_check_con_placeholder():
     cfg     = _make_config()
     scan_ts = datetime(2026, 5, 27, 3, 0, 0)
 
-    with patch.object(engine, "_lookup_check_watermark") as m:
+    with patch.object(incremental, "_lookup_check_watermark") as m:
         m.side_effect = [
             datetime(2026, 5, 26, 0, 0, 0),   # check_a
             datetime(2026, 5, 25, 0, 0, 0),   # check_b
         ]
-        new_sodacl, per_check_wm = engine._resolve_per_check_watermarks(
+        new_sodacl, per_check_wm = incremental._resolve_per_check_watermarks(
             spark=None,    # mockato sotto, non viene chiamato
             config=cfg,
             contract=_make_contract(SODACL_MISTO),
@@ -150,9 +149,9 @@ def test_ogni_check_riceve_il_suo_specifico_watermark():
     wm_a = datetime(2026, 5, 26, 12, 0, 0)
     wm_b = datetime(2026, 5, 25, 12, 0, 0)
 
-    with patch.object(engine, "_lookup_check_watermark") as m:
+    with patch.object(incremental, "_lookup_check_watermark") as m:
         m.side_effect = [wm_a, wm_b]
-        new_sodacl, per_check_wm = engine._resolve_per_check_watermarks(
+        new_sodacl, per_check_wm = incremental._resolve_per_check_watermarks(
             spark=None,
             config=cfg,
             contract=_make_contract(SODACL_MISTO),
@@ -177,8 +176,8 @@ def test_bootstrap_quando_lookup_torna_none():
     cfg     = _make_config()
     scan_ts = datetime(2026, 5, 27, 3, 0, 0)
 
-    with patch.object(engine, "_lookup_check_watermark", return_value=None):
-        _, per_check_wm = engine._resolve_per_check_watermarks(
+    with patch.object(incremental, "_lookup_check_watermark", return_value=None):
+        _, per_check_wm = incremental._resolve_per_check_watermarks(
             spark=None,
             config=cfg,
             contract=_make_contract(SODACL_MISTO),
@@ -196,8 +195,8 @@ def test_cli_override_forza_wm_from_per_tutti_i_check_incrementali():
     scan_ts      = datetime(2026, 5, 27, 3, 0, 0)
     cli_override = datetime(2026, 5, 20, 0, 0, 0)
 
-    with patch.object(engine, "_lookup_check_watermark") as m:
-        _, per_check_wm = engine._resolve_per_check_watermarks(
+    with patch.object(incremental, "_lookup_check_watermark") as m:
+        _, per_check_wm = incremental._resolve_per_check_watermarks(
             spark=None,
             config=cfg,
             contract=_make_contract(SODACL_MISTO),
@@ -217,8 +216,8 @@ def test_lookback_minutes_sottrae_dal_valore_dell_lookup():
     scan_ts = datetime(2026, 5, 27, 3, 0, 0)
     lookup_value = datetime(2026, 5, 26, 12, 0, 0)
 
-    with patch.object(engine, "_lookup_check_watermark", return_value=lookup_value):
-        _, per_check_wm = engine._resolve_per_check_watermarks(
+    with patch.object(incremental, "_lookup_check_watermark", return_value=lookup_value):
+        _, per_check_wm = incremental._resolve_per_check_watermarks(
             spark=None,
             config=cfg,
             contract=_make_contract(SODACL_MISTO),
@@ -238,9 +237,9 @@ def test_errore_se_wm_from_maggiore_uguale_wm_to():
     # wm_from successivo a scan_ts -> invalid
     invalid_wm = datetime(2026, 6, 1, 0, 0, 0)
 
-    with patch.object(engine, "_lookup_check_watermark", return_value=invalid_wm):
+    with patch.object(incremental, "_lookup_check_watermark", return_value=invalid_wm):
         with pytest.raises(ValueError, match="Watermark invalido"):
-            engine._resolve_per_check_watermarks(
+            incremental._resolve_per_check_watermarks(
                 spark=None,
                 config=cfg,
                 contract=_make_contract(SODACL_MISTO),
@@ -261,8 +260,8 @@ def test_contract_senza_placeholder_non_chiama_il_lookup_e_non_popola_dict():
             SELECT COUNT(*) FROM silver_t WHERE col_x < 0
     """.strip()
 
-    with patch.object(engine, "_lookup_check_watermark") as m:
-        new_sodacl, per_check_wm = engine._resolve_per_check_watermarks(
+    with patch.object(incremental, "_lookup_check_watermark") as m:
+        new_sodacl, per_check_wm = incremental._resolve_per_check_watermarks(
             spark=None,
             config=cfg,
             contract=_make_contract(sodacl_massivo),
@@ -289,12 +288,12 @@ def test_sostituisce_placeholder_dentro_filter_dei_check_nativi():
     cfg     = _make_config()
     scan_ts = datetime(2026, 5, 27, 3, 0, 0)
 
-    with patch.object(engine, "_lookup_check_watermark") as m:
+    with patch.object(incremental, "_lookup_check_watermark") as m:
         m.side_effect = [
             datetime(2026, 5, 26, 0, 0, 0),   # op
             datetime(2026, 5, 25, 0, 0, 0),   # ts_ms
         ]
-        new_sodacl, per_check_wm = engine._resolve_per_check_watermarks(
+        new_sodacl, per_check_wm = incremental._resolve_per_check_watermarks(
             spark=None,
             config=cfg,
             contract=_make_contract(SODACL_NATIVO),
@@ -355,8 +354,8 @@ def test_sostituzione_aliased_produce_colonna_qualificata():
     cfg     = _make_config()
     scan_ts = datetime(2026, 5, 27, 3, 0, 0)
 
-    with patch.object(engine, "_lookup_check_watermark", return_value=None):
-        new_sodacl, per_check_wm = engine._resolve_per_check_watermarks(
+    with patch.object(incremental, "_lookup_check_watermark", return_value=None):
+        new_sodacl, per_check_wm = incremental._resolve_per_check_watermarks(
             spark=None,
             config=cfg,
             contract=_make_contract(SODACL_ALIASED),
@@ -393,8 +392,8 @@ def test_due_check_con_alias_diversi_ricevono_prefissi_distinti():
             WHERE ${INCREMENTAL_CONDITIONS:sgt}
     """.strip()
 
-    with patch.object(engine, "_lookup_check_watermark", return_value=None):
-        new_sodacl, per_check_wm = engine._resolve_per_check_watermarks(
+    with patch.object(incremental, "_lookup_check_watermark", return_value=None):
+        new_sodacl, per_check_wm = incremental._resolve_per_check_watermarks(
             spark=None,
             config=cfg,
             contract=_make_contract(sodacl),
@@ -431,8 +430,8 @@ def test_mixed_bare_e_aliased_nello_stesso_campo():
               )
     """.strip()
 
-    with patch.object(engine, "_lookup_check_watermark", return_value=None):
-        new_sodacl, per_check_wm = engine._resolve_per_check_watermarks(
+    with patch.object(incremental, "_lookup_check_watermark", return_value=None):
+        new_sodacl, per_check_wm = incremental._resolve_per_check_watermarks(
             spark=None,
             config=cfg,
             contract=_make_contract(sodacl),
@@ -459,8 +458,8 @@ def test_filter_nativo_aliased_preserva_la_condizione_business():
           filter: op IN ('c', 'r', 'u') AND ${INCREMENTAL_CONDITIONS:spo}
     """.strip()
 
-    with patch.object(engine, "_lookup_check_watermark", return_value=None):
-        new_sodacl, per_check_wm = engine._resolve_per_check_watermarks(
+    with patch.object(incremental, "_lookup_check_watermark", return_value=None):
+        new_sodacl, per_check_wm = incremental._resolve_per_check_watermarks(
             spark=None,
             config=cfg,
             contract=_make_contract(sodacl),
@@ -484,8 +483,8 @@ def test_contract_solo_aliased_e_rilevato_come_incrementale():
     cfg     = _make_config()
     scan_ts = datetime(2026, 5, 27, 3, 0, 0)
 
-    with patch.object(engine, "_lookup_check_watermark", return_value=None):
-        _, per_check_wm = engine._resolve_per_check_watermarks(
+    with patch.object(incremental, "_lookup_check_watermark", return_value=None):
+        _, per_check_wm = incremental._resolve_per_check_watermarks(
             spark=None,
             config=cfg,
             contract=_make_contract(SODACL_ALIASED),
@@ -512,8 +511,8 @@ def test_alias_malformato_non_matcha_e_resta_nel_sodacl():
             WHERE ${INCREMENTAL_CONDITIONS:a.b}
     """.strip()
 
-    with patch.object(engine, "_lookup_check_watermark") as m:
-        new_sodacl, per_check_wm = engine._resolve_per_check_watermarks(
+    with patch.object(incremental, "_lookup_check_watermark") as m:
+        new_sodacl, per_check_wm = incremental._resolve_per_check_watermarks(
             spark=None,
             config=cfg,
             contract=_make_contract(sodacl),
@@ -539,4 +538,4 @@ def test_guard_regex_rileva_placeholder_solo_aliased():
     # Il vecchio comportamento (substring) NON rileverebbe il placeholder...
     assert "${INCREMENTAL_CONDITIONS}" not in sodacl_solo_aliased
     # ...mentre la regex usata da guard e detection lo rileva.
-    assert engine._INCREMENTAL_RE.search(sodacl_solo_aliased) is not None
+    assert incremental._INCREMENTAL_RE.search(sodacl_solo_aliased) is not None

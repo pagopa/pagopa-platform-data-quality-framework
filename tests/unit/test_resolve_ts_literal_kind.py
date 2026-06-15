@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from dq_framework.quality.engine import _resolve_ts_literal_kind
+from dq_framework.quality.utils.incremental import _resolve_ts_literal_kind
 
 
 def _spark_returning(simple_string: str) -> MagicMock:

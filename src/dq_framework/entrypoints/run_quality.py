@@ -50,6 +50,15 @@ def _parse_iso_datetime(value: str) -> datetime:
         ) from exc
 
 
+def _parse_primary_keys(value: str) -> list[str]:
+    """Parser argparse per --primary-keys: lista separata da virgola.
+
+    Supporta chiavi composite e nested (es. 'after.id,merchant_id'). Input
+    vuoto/whitespace -> [], così run_pipeline applica la surrogata di default.
+    """
+    return [pk.strip() for pk in value.split(",") if pk.strip()]
+
+
 def _parse_args(
     default_contract_path: str,
     default_repository: str,
@@ -119,6 +128,16 @@ def _parse_args(
             "incrementali del run."
         ),
     )
+    parser.add_argument(
+        "--primary-keys",
+        type=_parse_primary_keys,
+        default=None,
+        help=(
+            "Chiavi primarie del dataset per la tabella failed_records, "
+            "separate da virgola (composite/nested supportati, es. "
+            "'after.id,merchant_id'). Se assente si usa la surrogata 'dl_id'."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -140,6 +159,7 @@ def main(argv: list[str] | None = None) -> None:
         airflow_run_id            = args.airflow_run_id,
         watermark_column_override = args.watermark_column,
         watermark_from_override   = args.watermark_from,
+        primary_keys              = args.primary_keys,
     )
 
 

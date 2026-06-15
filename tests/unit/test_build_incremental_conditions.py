@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from dq_framework.quality.engine import _build_incremental_conditions
+from dq_framework.quality.utils.incremental import _build_incremental_conditions
 
 
 def test_genera_clausola_base_con_microsecondi():

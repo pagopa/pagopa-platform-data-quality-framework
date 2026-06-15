@@ -1,0 +1,46 @@
+dataContractSpecification: 0.9.3
+id: urn:pagopa:gpd:payment-option-incremental
+info:
+  title: Payment Option Incremental Contract (fixture)
+  description: >
+    Fixture per il test di integrazione della pipeline incrementale. Contiene due
+    check incrementali (con ${INCREMENTAL_CONDITIONS} su dl_event_tms) e un check
+    massivo, allineati ai nomi attesi da fake_scan in test_pipeline_incremental.
+  owner: pagoPA QA-Team
+  version: 0.0.1
+
+quality:
+  type: SodaCL
+  dataset: pagopa.silver_gpd_payment_option
+  specification: |-
+    checks for payment-option:
+
+      # Completezza incrementale: after.amount NOT NULL sulle nuove righe
+      - fld__cmp__amount__not_null_incremental = 0:
+          fld__cmp__amount__not_null_incremental query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_option
+            WHERE after.amount IS NULL
+              AND ${INCREMENTAL_CONDITIONS}
+          name: fld__cmp__amount__not_null_incremental
+
+      # Unicita' incrementale: nessun iuv duplicato tra le nuove righe
+      - ent__unq__iuv__no_duplicates_incremental = 0:
+          ent__unq__iuv__no_duplicates_incremental query: |
+            SELECT COUNT(*)
+            FROM (
+              SELECT after.iuv
+              FROM pagopa.silver_gpd_payment_option
+              WHERE ${INCREMENTAL_CONDITIONS}
+              GROUP BY after.iuv
+              HAVING COUNT(*) > 1
+            ) AS sub
+          name: ent__unq__iuv__no_duplicates_incremental
+
+      # Validita' massiva: amount non negativo (nessun placeholder -> vede tutto)
+      - fld__vld__amount__non_negative = 0:
+          fld__vld__amount__non_negative query: |
+            SELECT COUNT(*)
+            FROM pagopa.silver_gpd_payment_option
+            WHERE after.amount < 0
+          name: fld__vld__amount__non_negative
