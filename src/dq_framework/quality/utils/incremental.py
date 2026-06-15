@@ -35,6 +35,7 @@ def _lookup_check_watermark(
     config: AppConfig,
     dataset: str,
     check_name: str,
+    domain: str,
 ) -> Optional[datetime]:
     """Restituisce il massimo `watermark_to` registrato per il check specificato.
 
@@ -42,7 +43,7 @@ def _lookup_check_watermark(
     non avanzano il watermark. Se la tabella non esiste/è vuota o il lookup esplode,
     ritorna None e il chiamante applica il bootstrap.
     """
-    fqn = f"{config.results_database}.{config.results_table}"
+    fqn = f"{config.results_database}.dqf_{domain}_results"
     try:
         row = spark.sql(
             f"""
@@ -138,6 +139,7 @@ def _resolve_per_check_watermarks(
     scan_ts: datetime,
     watermark_column: str,
     cli_override: Optional[datetime],
+    domain: str,
 ) -> tuple[str, dict[str, datetime]]:
     """Walk del SodaCL con sostituzione per-check del placeholder.
 
@@ -189,7 +191,7 @@ def _resolve_per_check_watermarks(
                     source = "cli"
                 else:
                     looked_up = _lookup_check_watermark(
-                        spark, config, contract["table_name"], check_name
+                        spark, config, contract["table_name"], check_name, domain  
                     )
                     if looked_up is not None:
                         wm_from = looked_up - timedelta(
@@ -233,7 +235,7 @@ def _resolve_per_check_watermarks(
                     check_body[field] = _INCREMENTAL_RE.sub(_sub, value)
                 per_check_wm[check_name] = wm_from
 
-                logger.info(
+                logger.debug(
                     f"Watermark check='{check_name}' "
                     f"column={watermark_column} "
                     f"from={wm_from.isoformat()} to={scan_ts.isoformat()} "
@@ -251,6 +253,7 @@ def apply_incremental_conditions(
     scan_ts: datetime,
     watermark_column_override: Optional[str],
     watermark_from_override: Optional[datetime],
+    domain: str,
 ) -> tuple[str, dict[str, datetime], Optional[str]]:
     """Entry pubblico: se il SodaCL contiene il placeholder, risolve i watermark
     per-check e lo sostituisce; altrimenti è un no-op.
@@ -282,5 +285,6 @@ def apply_incremental_conditions(
         scan_ts          = scan_ts,
         watermark_column = effective_watermark_column,
         cli_override     = watermark_from_override,
+        domain           = domain,
     )
     return new_sodacl, per_check_wm, effective_watermark_column

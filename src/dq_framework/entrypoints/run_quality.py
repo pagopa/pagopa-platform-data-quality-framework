@@ -65,7 +65,14 @@ def _parse_args(
     default_ref: str,
     argv: list[str] | None = None,
 ) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Data Quality pipeline — GPD Silver Layer")
+    parser = argparse.ArgumentParser(description="Data Quality pipeline")
+
+    parser.add_argument(
+        "--domain",
+        required=True,
+        help="Dominio dei dati che determina le tabelle di output (es. gpd, fdr, bpd)",
+    )
+    
     parser.add_argument(
         "--contract-path",
         default=default_contract_path,
@@ -155,6 +162,7 @@ def main(argv: list[str] | None = None) -> None:
         repository                = args.repository,
         ref                       = args.ref,
         config                    = config,
+        domain                    = args.domain,
         dag_id                    = args.dag_id,
         airflow_run_id            = args.airflow_run_id,
         watermark_column_override = args.watermark_column,

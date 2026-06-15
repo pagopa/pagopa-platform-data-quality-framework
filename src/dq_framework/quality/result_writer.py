@@ -239,28 +239,28 @@ TBLPROPERTIES (
 """.strip()
 
 
-def _ensure_results_table(spark: SparkSession, config: AppConfig, fqn: str) -> None:
-    location_clause = (
-        f"LOCATION '{config.results_table_location}'"
-        if config.results_table_location
-        else ""
-    )
+def _ensure_results_table(spark: SparkSession, config: AppConfig, fqn: str, domain: str) -> None:
+    location_clause = ""
+    if config.results_table_location:
+        base_loc = config.results_table_location.rsplit("/", 1)[0]
+        location_clause = f"LOCATION '{base_loc}/dqf_{domain}_results'"
+        
     ddl = _RESULTS_TABLE_DDL.format(fqn=fqn, location_clause=location_clause)
     logger.info(f"Esecuzione CREATE TABLE IF NOT EXISTS su {fqn}")
     spark.sql(ddl)
 
 
-def write_results_to_iceberg(spark: SparkSession, df_results: DataFrame, config: AppConfig) -> None:
+def write_results_to_iceberg(spark: SparkSession, df_results: DataFrame, config: AppConfig, domain: str) -> None:
     if not config.results_write_enabled:
         logger.info(
             f"results_write_enabled=False (env={config.env}): scrittura su DB saltata per tabella results."
         )
         return
 
-    fqn = f"{config.results_database}.{config.results_table}"
+    fqn = f"{config.results_database}.dqf_{domain}_results"
     logger.info(f"Scrittura risultati su tabella Iceberg principale: {fqn}")
     try:
-        _ensure_results_table(spark, config, fqn)
+        _ensure_results_table(spark, config, fqn, domain)
         df_results.writeTo(fqn).append()
         logger.info(f"Scrittura completata: {df_results.count()} record inseriti in {fqn}.")
     except Exception as e:
@@ -294,11 +294,11 @@ TBLPROPERTIES (
 """.strip()
 
 
-def _ensure_failed_records_table(spark: SparkSession, config: AppConfig, fqn: str) -> None:
+def _ensure_failed_records_table(spark: SparkSession, config: AppConfig, fqn: str, domain: str) -> None:
     failed_loc_clause = ""
     if config.results_table_location:
         base_loc = config.results_table_location.rsplit("/", 1)[0]
-        failed_loc_clause = f"LOCATION '{base_loc}/dqf_gpd_failed_records'"
+        failed_loc_clause = f"LOCATION '{base_loc}/dqf_{domain}_failed_records'"
 
     ddl = _FAILED_RECORDS_TABLE_DDL.format(fqn=fqn, location_clause=failed_loc_clause)
     spark.sql(ddl)
@@ -321,7 +321,10 @@ def run_manual_failed_queries(
 
     logger.info(f"Esecuzione di {len(pending)} failed query differite per il dettaglio record...")
 
+    
+
     for row in pending:
+        
         query_info = extracted_queries[row.check_name]
         base_query = query_info["query"]
         fields = query_info["fields"]
@@ -336,7 +339,8 @@ def run_manual_failed_queries(
         failed_records_query += f"LIMIT {config.failed_sample_limit}"
 
         try:
-            logger.debug(f"Failed query per check {row.check_name}: {failed_records_query}")
+            logger.info(f"Failed query per check {row.check_name}: {failed_records_query}")
+
             failed_df = spark.sql(failed_records_query)
             sampler.failed_data[row.check_name] = [record.asDict() for record in failed_df.collect()]
         except Exception as e:
@@ -395,6 +399,7 @@ def process_and_write_failed_records(
     sampler,
     config: AppConfig,
     primary_keys: list[str],
+    domain: str,
 ) -> None:
     """Converte i campioni in RAM dal MemorySampler in un DataFrame e li salva su Iceberg.
 
@@ -405,8 +410,8 @@ def process_and_write_failed_records(
         return
 
     pk_cols = primary_keys or ["dl_id"]
-    fqn = f"{config.results_database}.dqf_gpd_failed_records"
-    _ensure_failed_records_table(spark, config, fqn)
+    fqn = f"{config.results_database}.dqf_{domain}_failed_records"
+    _ensure_failed_records_table(spark, config, fqn, domain)
 
     failed_rows_list = []
 

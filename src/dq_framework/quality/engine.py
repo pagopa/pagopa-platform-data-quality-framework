@@ -42,6 +42,7 @@ def run_pipeline(
     repository:                str,
     ref:                       str,
     config:                    AppConfig,
+    domain:                    str,
     dag_id:                    Optional[str]       = None,
     airflow_run_id:            Optional[str]       = None,
     watermark_column_override: Optional[str]       = None,
@@ -49,14 +50,14 @@ def run_pipeline(
     primary_keys:              Optional[list[str]] = None,
 ) -> None:
     source_desc = f"{repository}@{ref}:{contract_path}" if repository else contract_path
-    logger.info(f"Avvio pipeline Data Quality GPD per: {source_desc}")
+    logger.info(f"Avvio pipeline Data Quality {domain.upper()} per: {source_desc}")
 
     contract = parse_contract_file(contract_path, repository, ref, config)
     if not contract:
         logger.error("Contract non valido o non trovato. Pipeline terminata.")
         return
 
-    spark   = init_spark(app_name=f"gpd_quality_{contract['table_name']}")
+    spark   = init_spark(app_name=f"{domain}_quality_{contract['table_name']}")
     run_id  = str(uuid.uuid4())
     scan_ts = datetime.now(timezone.utc).replace(tzinfo=None)  # FREEZE POINT, naive-UTC
     effective_dag_id       = dag_id or f"manual:{config.env}"
@@ -69,7 +70,7 @@ def run_pipeline(
 
     # Controlli incrementali: l'intero blocco watermark collassa in una chiamata.
     contract["sodacl"], per_check_wm, effective_watermark_column = apply_incremental_conditions(
-        spark, config, contract, scan_ts, watermark_column_override, watermark_from_override
+        spark, config, contract, scan_ts, watermark_column_override, watermark_from_override, domain 
     )
 
     # Estrazione delle failed-query DOPO la sostituzione watermark, così la query
@@ -105,13 +106,13 @@ def run_pipeline(
         log_results_summary(df_results)
 
         # DB 1: tabella aggregata (results)
-        write_results_to_iceberg(spark, df_results, config)
+        write_results_to_iceberg(spark, df_results, config, domain)
 
         if extracted_queries:
             run_manual_failed_queries(spark, result_rows, extracted_queries, sampler, config)
 
         # DB 2: tabella operativa di dettaglio (failed records)
-        process_and_write_failed_records(spark, result_rows, sampler, config, effective_primary_keys)
+        process_and_write_failed_records(spark, result_rows, sampler, config, effective_primary_keys, domain)
     else:
         logger.warning("Nessun risultato elaborato.")
 
