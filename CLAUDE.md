@@ -29,7 +29,7 @@ ENV=dev python -m dq_framework.entrypoints.run_quality \
   --contract-path src/data/.../dc-foo.yaml --repository owner/repo --ref main
 ```
 
-Note: `pyproject.toml` declares `ruff` as the dev linter, but the Makefile target uses `flake8`. Use `make lint` to match CI.
+Note: the CI lint gate is `ruff check .` (`.github/workflows/dq_framework_ci.yml`, `line-length = 120` from `pyproject.toml`); CI does **not** run pytest. The Makefile `make lint` target still calls `flake8`, which is *not* what CI enforces — lint with `ruff check .` to match CI.
 
 ## Architecture
 
@@ -44,13 +44,18 @@ Note: `pyproject.toml` declares `ruff` as the dev linter, but the Makefile targe
 
 ### Quality pipeline flow (`quality/engine.py::run_pipeline`)
 
-1. `contract_parser.parse_contract_file` — loads YAML from local path or GitHub Contents API (base64-decoded; uses `GITHUB_TOKEN` from `common.secrets`). Returns dict with `contract_title`, `contract_version`, `table_name`, parsed checks.
-2. `init_spark()` — `SparkSession` with `enableHiveSupport()`, app name `gpd_quality_pipeline`.
-3. `soda_executor.run_dataframe_soda_scan` — converts contract → SodaCL and runs the scan against the registered Spark DataFrame.
-4. `result_writer.process_scan_results` — flattens Soda check outcomes into rows matching `RESULTS_SCHEMA` (includes `run_id`, Airflow context, dataset, check metadata, measured values, row counts). `dag_id` is `NOT NULL`; if no Airflow context is provided it falls back to `manual:{env}`.
-5. `_write_results_to_iceberg` — `CREATE TABLE IF NOT EXISTS` (Iceberg, partitioned by `execution_date`, merge-on-read) then `df.writeTo(fqn).append()`. Skipped entirely when `results_write_enabled=False`.
+`run_pipeline` is a thin orchestrator: it only calls functions, the logic lives in the leaf modules below.
 
-There is a commented-out path for executing checks directly against Impala via SQL embedded in the contract's `quality:` block — keep this in mind when extending the scan stage.
+1. `contract_parser.parse_contract_file` — delegates I/O to `contract_reader.read_contract_doc` (local path or GitHub Contents API, base64-decoded, `GITHUB_TOKEN` from `common.secrets`), then extracts metadata, `dataset`, `table_name` and the normalized SodaCL. Returns a dict (no checks pre-extracted).
+2. `utils.incremental.apply_incremental_conditions` — if the SodaCL contains `${INCREMENTAL_CONDITIONS}`, resolves the per-check watermark (CLI override → Iceberg `pass` lookup → epoch bootstrap) and substitutes it; otherwise a no-op.
+3. `contract_parser.extract_and_clean_failed_queries` — pulls the deferred `failed query fields` out of the SodaCL **after** watermark substitution (so the saved query has resolved timestamps).
+4. `init_spark(app_name=...)` — `SparkSession` with `enableHiveSupport()`, app name derived from the contract (`gpd_quality_<table_name>`).
+5. `soda_executor.run_dataframe_soda_scan` — loads the table (and xref) via `_load_view`, injects a `MemorySampler` (failed rows captured on-prem; Soda Cloud `samples_limit` forced to 0 so no record samples are uploaded), runs the scan.
+6. `result_writer.process_scan_results` — flattens Soda outcomes into rows matching `RESULTS_SCHEMA` (`run_id`, Airflow context, dataset, check metadata, measured values, row counts, watermark columns). `dag_id` is `NOT NULL`; falls back to `manual:{env}`.
+7. `result_writer.write_results_to_iceberg` — `CREATE TABLE IF NOT EXISTS` (Iceberg, partitioned by `execution_date`, merge-on-read) then `df.writeTo(fqn).append()`. Skipped when `results_write_enabled=False`.
+8. `result_writer.run_manual_failed_queries` + `process_and_write_failed_records` — re-run the deferred failed-row queries and persist the offending records to the `dqf_gpd_failed_records` Iceberg table. The primary keys come from the `--primary-keys` CLI flag (surrogate `dl_id` if absent).
+
+Auxiliary modules live under `quality/utils/`: logging summaries in `utils/result_logging`, incremental watermark logic in `utils/incremental`. There is no Impala execution path.
 
 ### Tests
 
