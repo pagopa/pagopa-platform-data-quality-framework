@@ -4,6 +4,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
+from pyspark.sql import Row
 
 from pyspark.sql import SparkSession
 
@@ -101,18 +102,27 @@ def run_pipeline(
         logger.warning("Nessun check restituito dallo scan Soda.")
 
     if result_rows:
-        df_results = spark.createDataFrame(result_rows, schema=RESULTS_SCHEMA)
+        if extracted_queries:
+            run_manual_failed_queries(spark, result_rows, extracted_queries, sampler, config)
+
+        final_result_rows = []
+        for r in result_rows:
+            row_dict = r.asDict()
+
+            actual_records = sampler.failed_data.get(r.check_name, [])
+            row_dict["has_failed_records"] = len(actual_records) > 0
+            
+            final_result_rows.append(Row(**row_dict))
+
+        df_results = spark.createDataFrame(final_result_rows, schema=RESULTS_SCHEMA)
 
         log_results_summary(df_results)
 
         # DB 1: tabella aggregata (results)
         write_results_to_iceberg(spark, df_results, config, domain)
 
-        if extracted_queries:
-            run_manual_failed_queries(spark, result_rows, extracted_queries, sampler, config)
-
         # DB 2: tabella operativa di dettaglio (failed records)
-        process_and_write_failed_records(spark, result_rows, sampler, config, effective_primary_keys, domain)
+        process_and_write_failed_records(spark, final_result_rows, sampler, config, effective_primary_keys, domain)
     else:
         logger.warning("Nessun risultato elaborato.")
 

@@ -39,7 +39,7 @@ class AppConfig:
     #   tabella failed_records. Vale per entrambi i path di cattura: i sample dei
     #   check nativi Soda (MemorySampler) e il LIMIT delle failed-query custom
     #   ricostruite a posteriori.
-    failed_sample_limit: int = 100
+    failed_sample_limit: int = 5
     #   Primary key surrogate usate per failed_records quando il DAG non passa
     #   --primary-keys. Tuple perche' la dataclass e' frozen (default immutabile).
     default_primary_keys: tuple[str, ...] = ("dl_id",)
