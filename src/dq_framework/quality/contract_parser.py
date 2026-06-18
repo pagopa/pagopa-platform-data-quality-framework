@@ -52,9 +52,9 @@ def _normalize_sodacl(sodacl: str, dataset: str, table_name: str, xref_datasets:
 
 
 def extract_and_clean_failed_queries(sodacl_yaml: str) -> tuple[str, dict[str, dict]]:
-    """Estrae i 'failed query fields' dal SodaCL e li rimuove dallo YAML.
+    """Estrae i 'failed-query-fields' dal SodaCL e li rimuove dallo YAML.
 
-    Soda non conosce la chiave 'failed query fields': la togliamo per non far
+    Soda non conosce la chiave 'failed-query-fields': la togliamo per non far
     fallire l'engine e salviamo (query massiva + campi) per l'esecuzione
     differita sulle righe fallite. Va invocata DOPO la sostituzione watermark,
     così la query salvata ha già i timestamp risolti.
@@ -84,10 +84,10 @@ def extract_and_clean_failed_queries(sodacl_yaml: str) -> tuple[str, dict[str, d
                 if not isinstance(check_body, dict):
                     continue
 
-                if "failed query fields" not in check_body:
+                if "failed-query-fields" not in check_body:
                     continue
 
-                fields = check_body.pop("failed query fields")
+                fields = check_body.pop("failed-query-fields")
                 check_name = check_body.get("name")
                 # Chiave della query massiva (es. 'mio_check query')
                 query_key = next(
@@ -97,7 +97,7 @@ def extract_and_clean_failed_queries(sodacl_yaml: str) -> tuple[str, dict[str, d
 
                 if not (check_name and query_key and isinstance(fields, str) and fields.strip()):
                     logger.warning(
-                        f"'failed query fields' ignorato: name/query/fields mancanti o "
+                        f"'failed-query-fields' ignorato: name/query/fields mancanti o "
                         f"vuoti (check='{check_name}', query_key={query_key!r})."
                     )
                     continue

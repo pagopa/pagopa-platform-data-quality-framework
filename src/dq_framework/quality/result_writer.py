@@ -312,7 +312,7 @@ def run_manual_failed_queries(
     config: AppConfig,
 ) -> None:
     """Per ogni check fallito con query custom, ricostruisce la SELECT dei campi
-    incriminati (sostituendo COUNT(*) coi 'failed query fields') e la esegue,
+    incriminati (sostituendo COUNT(*) coi 'failed-query-fields') e la esegue,
     riversando i record nel MemorySampler per la scrittura su Iceberg.
     """
     pending = [r for r in result_rows if r.has_failed_records and r.check_name in extracted_queries]

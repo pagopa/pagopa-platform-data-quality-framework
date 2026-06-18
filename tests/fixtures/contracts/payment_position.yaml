@@ -612,7 +612,7 @@ quality:
             WHERE op IN ('c', 'r', 'u')
               AND LENGTH(CAST(after.max_due_date AS STRING)) > 16
               AND ${INCREMENTAL_CONDITIONS}
-          failed query fields: dl_id, after.iupd, after.id, after.max_due_date
+          failed-query-fields: dl_id, after.iupd, after.id, after.max_due_date
           name: fld__vld__max_due_date__timestamp_length
       - fld__vld__max_due_date__date_max_30y = 0:
           fld__vld__max_due_date__date_max_30y query: |
@@ -621,7 +621,7 @@ quality:
             WHERE op IN ('c', 'r', 'u')
               AND after.max_due_date > unix_micros(CAST(add_months(current_date(), 360) AS TIMESTAMP))
               AND ${INCREMENTAL_CONDITIONS}
-          failed query fields: dl_id, after.iupd, after.id, after.max_due_date, from_unixtime(after.max_due_date / 1000000) AS max_due_date_ts
+          failed-query-fields: dl_id, after.iupd, after.id, after.max_due_date, from_unixtime(after.max_due_date / 1000000) AS max_due_date_ts
           name: fld__vld__max_due_date__date_max_30y
       - fld__vld__min_due_date__timestamp_length = 0:
           fld__vld__min_due_date__timestamp_length query: |
@@ -630,7 +630,7 @@ quality:
             WHERE op IN ('c', 'r', 'u')
               AND LENGTH(CAST(after.min_due_date AS STRING)) > 16
               AND ${INCREMENTAL_CONDITIONS}
-          failed query fields: dl_id, after.iupd, after.id, after.min_due_date
+          failed-query-fields: dl_id, after.iupd, after.id, after.min_due_date
           name: fld__vld__min_due_date__timestamp_length
       - fld__vld__min_due_date__date_max_30y = 0:
           fld__vld__min_due_date__date_max_30y query: |
@@ -639,7 +639,7 @@ quality:
             WHERE op IN ('c', 'r', 'u')
               AND after.min_due_date > unix_micros(CAST(add_months(current_date(), 360) AS TIMESTAMP))
               AND ${INCREMENTAL_CONDITIONS}
-          failed query fields: dl_id, after.iupd, after.id, after.min_due_date, from_unixtime(after.min_due_date / 1000000) AS min_due_date_ts
+          failed-query-fields: dl_id, after.iupd, after.id, after.min_due_date, from_unixtime(after.min_due_date / 1000000) AS min_due_date_ts
           name: fld__vld__min_due_date__date_max_30y
       # Name Excel ha refuso "min_publish_date"; colonna DDL reale: after.publish_date (Name usato as-is). Campo nullable.
       - fld__vld__min_publish_date__timestamp_length = 0:
@@ -650,7 +650,7 @@ quality:
               AND after.publish_date IS NOT NULL
               AND LENGTH(CAST(after.publish_date AS STRING)) > 16
               AND ${INCREMENTAL_CONDITIONS}
-          failed query fields: dl_id, after.iupd, after.id, after.publish_date
+          failed-query-fields: dl_id, after.iupd, after.id, after.publish_date
           name: fld__vld__min_publish_date__timestamp_length
       - fld__vld__validity_date__timestamp_length = 0:
           fld__vld__validity_date__timestamp_length query: |
@@ -660,7 +660,7 @@ quality:
               AND after.validity_date IS NOT NULL
               AND LENGTH(CAST(after.validity_date AS STRING)) > 16
               AND ${INCREMENTAL_CONDITIONS}
-          failed query fields: dl_id, after.iupd, after.id, after.validity_date
+          failed-query-fields: dl_id, after.iupd, after.id, after.validity_date
           name: fld__vld__validity_date__timestamp_length
       - fld__vld__validity_date__date_max_30y = 0:
           fld__vld__validity_date__date_max_30y query: |
@@ -670,7 +670,7 @@ quality:
               AND after.validity_date IS NOT NULL
               AND after.validity_date > unix_micros(CAST(add_months(current_date(), 360) AS TIMESTAMP))
               AND ${INCREMENTAL_CONDITIONS}
-          failed query fields: dl_id, after.iupd, after.id, after.validity_date, from_unixtime(after.validity_date / 1000000) AS validity_date_ts
+          failed-query-fields: dl_id, after.iupd, after.id, after.validity_date, from_unixtime(after.validity_date / 1000000) AS validity_date_ts
           name: fld__vld__validity_date__date_max_30y
       # Name Excel ha refuso "last_update_date"; colonna DDL reale: after.last_updated_date (Name usato as-is)
       - fld__vld__last_update_date__timestamp_length = 0:
@@ -680,7 +680,7 @@ quality:
             WHERE op IN ('c', 'r', 'u')
               AND LENGTH(CAST(after.last_updated_date AS STRING)) > 16
               AND ${INCREMENTAL_CONDITIONS}
-          failed query fields: dl_id, after.iupd, after.id, after.last_updated_date
+          failed-query-fields: dl_id, after.iupd, after.id, after.last_updated_date
           name: fld__vld__last_update_date__timestamp_length
       # Preesistente (attivo): lunghezza MIN 16 cifre su payment_date (< 16 = violazione)
       - fld__vld__payment_date__digit_length_min_16 = 0:
@@ -691,7 +691,7 @@ quality:
               AND after.payment_date IS NOT NULL
               AND LENGTH(CAST(after.payment_date AS STRING)) < 16
               AND ${INCREMENTAL_CONDITIONS}
-          failed query fields: dl_id, after.iupd, after.id, after.payment_date
+          failed-query-fields: dl_id, after.iupd, after.id, after.payment_date
           name: fld__vld__payment_date__digit_length_min_16
 
       # ============================================================
@@ -710,7 +710,7 @@ quality:
               GROUP BY after.iupd, after.organization_fiscal_code
               HAVING COUNT(*) > 1
             ) AS sub
-          failed query fields: sub.iupd, sub.organization_fiscal_code, sub.cnt
+          failed-query-fields: sub.iupd, sub.organization_fiscal_code, sub.cnt
           name: ent__unq__iupd_org_fiscal_code__no_duplicates
       # Se payment_date valorizzato allora status IN (PAID, REPORTED, PARTIALLY_PAID)
       - ent__cns__payment_date_status__conditional_value = 0:
@@ -721,7 +721,7 @@ quality:
               AND after.payment_date IS NOT NULL
               AND after.status NOT IN ('PAID', 'REPORTED', 'PARTIALLY_PAID')
               AND ${INCREMENTAL_CONDITIONS}
-          failed query fields: dl_id, after.iupd, after.id, after.payment_date, after.status
+          failed-query-fields: dl_id, after.iupd, after.id, after.payment_date, after.status
           name: ent__cns__payment_date_status__conditional_value
       # Se publish_date NON valorizzato allora status puo' essere solo DRAFT
       - ent__cns__publish_date_status__conditional_value = 0:
@@ -732,7 +732,7 @@ quality:
               AND after.publish_date IS NULL
               AND after.status != 'DRAFT'
               AND ${INCREMENTAL_CONDITIONS}
-          failed query fields: dl_id, after.iupd, after.id, after.publish_date, after.status
+          failed-query-fields: dl_id, after.iupd, after.id, after.publish_date, after.status
           name: ent__cns__publish_date_status__conditional_value
       # Se switch_to_expired = TRUE allora max_due_date non puo' essere oltre now()
       - ent__cns__switch_to_expired_max_due_date__conditional_value = 0:
@@ -743,7 +743,7 @@ quality:
               AND after.switch_to_expired = TRUE
               AND after.max_due_date > unix_micros(current_timestamp())
               AND ${INCREMENTAL_CONDITIONS}
-          failed query fields: dl_id, after.iupd, after.id, after.switch_to_expired, after.max_due_date, from_unixtime(after.max_due_date / 1000000) AS max_due_date_ts
+          failed-query-fields: dl_id, after.iupd, after.id, after.switch_to_expired, after.max_due_date, from_unixtime(after.max_due_date / 1000000) AS max_due_date_ts
           name: ent__cns__switch_to_expired_max_due_date__conditional_value
       # Presenza struct after: presente su c/r/u, assente su d
       - ent__cmp__after_struct__conditional_presence = 0:
@@ -755,7 +755,7 @@ quality:
                 OR (op = 'd' AND after IS NOT NULL)
               )
               AND ${INCREMENTAL_CONDITIONS}
-          failed query fields: dl_id, op, after.id, after.iupd, before.id, before.iupd
+          failed-query-fields: dl_id, op, after.id, after.iupd, before.id, before.iupd
           name: ent__cmp__after_struct__conditional_presence
       # Presenza struct before: presente su d, assente su c/r/u
       - ent__cmp__before_struct__conditional_presence = 0:
@@ -767,7 +767,7 @@ quality:
                 OR (op IN ('c', 'r', 'u') AND before IS NOT NULL)
               )
               AND ${INCREMENTAL_CONDITIONS}
-          failed query fields: dl_id, op, after.id, after.iupd, before.id, before.iupd
+          failed-query-fields: dl_id, op, after.id, after.iupd, before.id, before.iupd
           name: ent__cmp__before_struct__conditional_presence
       # Coerenza envelope delete: su op='d' la struct before deve avere solo id valorizzato
       # (preesistente count_before_delete, normalizzato)
@@ -790,7 +790,7 @@ quality:
                     OR before.inserted_date != 0
               )
               AND ${INCREMENTAL_CONDITIONS}
-          failed query fields: dl_id, op, before.id, before.iupd, before.fiscal_code, before.organization_fiscal_code
+          failed-query-fields: dl_id, op, before.id, before.iupd, before.fiscal_code, before.organization_fiscal_code
           name: ent__cns__delete_event__before_fields_cleared
       # WARNING: after.fiscal_code e' tokenizzato in silver (pii=true, UUID); il confronto
       # fiscal_code = organization_fiscal_code non trovera' match in silver. Valutare layer bronze.
@@ -801,7 +801,7 @@ quality:
             WHERE op IN ('c', 'r', 'u')
               AND after.fiscal_code = after.organization_fiscal_code
               AND ${INCREMENTAL_CONDITIONS}
-          failed query fields: dl_id, after.iupd, after.id, after.fiscal_code, after.organization_fiscal_code
+          failed-query-fields: dl_id, after.iupd, after.id, after.fiscal_code, after.organization_fiscal_code
           name: ent__cns__fiscal_code__creditor_debtor_coherence
 
       # ============================================================
@@ -819,7 +819,7 @@ quality:
             WHERE spo.op IN ('c', 'r', 'u')
               AND spp.dl_id IS NULL
               AND ${INCREMENTAL_CONDITIONS:spo}
-          failed query fields: spo.dl_id, spo.after.iuv, spo.after.organization_fiscal_code, spo.after.payment_position_id
+          failed-query-fields: spo.dl_id, spo.after.iuv, spo.after.organization_fiscal_code, spo.after.payment_position_id
           name: xref__cns__payment_position__referential_integrity
       # Coerenza CF creditore/debitore tra payment_position e payment_option (driving = spp)
       # WARNING: after.fiscal_code tokenizzato in silver (pii=true): possibili falsi negativi. Valutare bronze.
@@ -833,7 +833,7 @@ quality:
               AND spo.op IN ('c', 'r', 'u')
               AND spp.after.fiscal_code = spo.after.organization_fiscal_code
               AND ${INCREMENTAL_CONDITIONS:spp}
-          failed query fields: spp.dl_id, spp.after.iupd, spp.after.fiscal_code, spo.after.organization_fiscal_code
+          failed-query-fields: spp.dl_id, spp.after.iupd, spp.after.fiscal_code, spo.after.organization_fiscal_code
           name: xref__cns__payment_option__fiscal_code_coherence
       # Coerenza cronologica: payment_option.due_date non oltre payment_position.max_due_date
       # (driving = payment_option spo, righe che generano la violazione)
@@ -848,7 +848,7 @@ quality:
               AND spo.after.due_date IS NOT NULL
               AND spo.after.due_date > spp.after.max_due_date
               AND ${INCREMENTAL_CONDITIONS:spo}
-          failed query fields: spo.dl_id, spo.after.iuv, spo.after.organization_fiscal_code, spo.after.due_date, spp.after.max_due_date
+          failed-query-fields: spo.dl_id, spo.after.iuv, spo.after.organization_fiscal_code, spo.after.due_date, spp.after.max_due_date
           name: xref__cns__due_dates__temporal_sequence
 
       # ============================================================
