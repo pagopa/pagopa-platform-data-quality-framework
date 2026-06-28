@@ -29,6 +29,32 @@ _INCREMENTAL_RE = re.compile(
     r"\$\{INCREMENTAL_CONDITIONS(?::([A-Za-z_][A-Za-z0-9_]*))?\}"
 )
 
+# Policy di avanzamento watermark -> insieme di outcome che "committano" il
+# watermark nel lookup su Iceberg. Vedi AppConfig.incremental_watermark_advance_policy.
+#   - pass_only: solo le run 'pass' fanno avanzare (warn/fail riprocessano la finestra)
+#   - executed : ogni check eseguito (pass/warn/fail) fa avanzare; resta indietro solo
+#                un check non eseguito (errore -> nessun outcome valido)
+_ADVANCE_OUTCOMES: dict[str, tuple[str, ...]] = {
+    "pass_only": ("pass",),
+    "executed":  ("pass", "warn", "fail"),
+}
+
+
+def _resolve_advance_outcomes(config: AppConfig) -> tuple[str, ...]:
+    """Outcome che fanno avanzare il watermark, secondo la policy configurata.
+
+    Solleva ValueError (fail-fast) se la policy non e' riconosciuta, così un
+    refuso in config non degrada silenziosamente al comportamento di default.
+    """
+    policy = config.incremental_watermark_advance_policy
+    try:
+        return _ADVANCE_OUTCOMES[policy]
+    except KeyError:
+        raise ValueError(
+            f"incremental_watermark_advance_policy={policy!r} non valido. "
+            f"Valori ammessi: {sorted(_ADVANCE_OUTCOMES)}."
+        )
+
 
 def _lookup_check_watermark(
     spark: SparkSession,
@@ -36,13 +62,19 @@ def _lookup_check_watermark(
     dataset: str,
     check_name: str,
     domain: str,
+    advance_outcomes: tuple[str, ...] = ("pass",),
 ) -> Optional[datetime]:
     """Restituisce il massimo `watermark_to` registrato per il check specificato.
 
-    Filtra su `outcome = 'pass'` e `watermark_to IS NOT NULL`, così run in warn/fail
-    non avanzano il watermark. Se la tabella non esiste/è vuota o il lookup esplode,
-    ritorna None e il chiamante applica il bootstrap.
+    Filtra sugli `outcome` in `advance_outcomes` (derivati dalla policy
+    `AppConfig.incremental_watermark_advance_policy`) e su `watermark_to IS NOT NULL`.
+    Con `pass_only` -> ('pass',) le run in warn/fail non avanzano il watermark;
+    con `executed` -> ('pass','warn','fail') anche warn/fail lo fanno avanzare,
+    mentre i check non eseguiti (nessun outcome valido) restano comunque esclusi.
+    Se la tabella non esiste/è vuota o il lookup esplode, ritorna None e il
+    chiamante applica il bootstrap.
     """
+    outcome_in = ", ".join(f"'{o}'" for o in advance_outcomes)
     fqn = f"{config.results_database}.dqf_{domain}_results"
     try:
         row = spark.sql(
@@ -51,7 +83,7 @@ def _lookup_check_watermark(
             FROM {fqn}
             WHERE dataset = '{dataset}'
               AND check_name = '{check_name}'
-              AND outcome = 'pass'
+              AND outcome IN ({outcome_in})
               AND watermark_to IS NOT NULL
             """
         ).collect()
@@ -145,7 +177,8 @@ def _resolve_per_check_watermarks(
 
     Ritorna `(sodacl_yaml, per_check_wm)`: il secondo mappa `check_name -> wm_from`
     solo per i check incrementali (i massivi non compaiono). Risoluzione di wm_from:
-    CLI override → lookup Iceberg 'pass' con lookback → bootstrap a epoch.
+    CLI override → lookup Iceberg (outcome filtrati per policy) con lookback →
+    bootstrap a epoch.
     Solleva ValueError se per qualche check `wm_from >= scan_ts`.
 
     NB invariante naive-UTC: `scan_ts` e i watermark letti da Iceberg sono naive;
@@ -158,6 +191,7 @@ def _resolve_per_check_watermarks(
         return contract["sodacl"], per_check_wm
 
     ts_kind = _resolve_ts_literal_kind(spark, contract["dataset"], watermark_column)
+    advance_outcomes = _resolve_advance_outcomes(config)
 
     for key in spec_dict:
         if not isinstance(key, str) or not key.startswith("checks for "):
@@ -191,7 +225,8 @@ def _resolve_per_check_watermarks(
                     source = "cli"
                 else:
                     looked_up = _lookup_check_watermark(
-                        spark, config, contract["table_name"], check_name, domain  
+                        spark, config, contract["table_name"], check_name, domain,
+                        advance_outcomes,
                     )
                     if looked_up is not None:
                         wm_from = looked_up - timedelta(

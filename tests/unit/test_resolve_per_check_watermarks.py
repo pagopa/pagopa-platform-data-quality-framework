@@ -7,6 +7,7 @@ e da una tabella Iceberg reale. Si concentrano sul comportamento del walker:
     - bootstrap quando il lookup torna None
     - CLI override forza wm_from per tutti i check incrementali
     - errore se wm_from >= scan_ts
+    - la policy di avanzamento watermark viene propagata al lookup
 """
 from __future__ import annotations
 
@@ -19,6 +20,8 @@ import yaml
 
 from dq_framework.common.config.base import AppConfig
 from dq_framework.quality.utils import incremental
+
+DOMAIN = "gpd"
 
 
 # ---------------------------------------------------------------------------
@@ -117,6 +120,7 @@ def test_sostituisce_solo_check_con_placeholder():
             scan_ts=scan_ts,
             watermark_column="dl_event_tms",
             cli_override=None,
+            domain=DOMAIN,
         )
 
     spec = yaml.safe_load(new_sodacl)
@@ -158,6 +162,7 @@ def test_ogni_check_riceve_il_suo_specifico_watermark():
             scan_ts=scan_ts,
             watermark_column="dl_event_tms",
             cli_override=None,
+            domain=DOMAIN,
         )
 
     assert per_check_wm["check_a_incrementale"] == wm_a
@@ -184,6 +189,7 @@ def test_bootstrap_quando_lookup_torna_none():
             scan_ts=scan_ts,
             watermark_column="dl_event_tms",
             cli_override=None,
+            domain=DOMAIN,
         )
 
     assert per_check_wm["check_a_incrementale"] == datetime(1970, 1, 1)
@@ -203,6 +209,7 @@ def test_cli_override_forza_wm_from_per_tutti_i_check_incrementali():
             scan_ts=scan_ts,
             watermark_column="dl_event_tms",
             cli_override=cli_override,
+            domain=DOMAIN,
         )
 
     # Con CLI override il lookup NON dovrebbe essere mai chiamato
@@ -224,6 +231,7 @@ def test_lookback_minutes_sottrae_dal_valore_dell_lookup():
             scan_ts=scan_ts,
             watermark_column="dl_event_tms",
             cli_override=None,
+            domain=DOMAIN,
         )
 
     # 30 minuti di lookback applicati al valore dell'Iceberg lookup
@@ -246,6 +254,7 @@ def test_errore_se_wm_from_maggiore_uguale_wm_to():
                 scan_ts=scan_ts,
                 watermark_column="dl_event_tms",
                 cli_override=None,
+                domain=DOMAIN,
             )
 
 
@@ -268,6 +277,7 @@ def test_contract_senza_placeholder_non_chiama_il_lookup_e_non_popola_dict():
             scan_ts=scan_ts,
             watermark_column="dl_event_tms",
             cli_override=None,
+            domain=DOMAIN,
         )
 
     m.assert_not_called()
@@ -300,6 +310,7 @@ def test_sostituisce_placeholder_dentro_filter_dei_check_nativi():
             scan_ts=scan_ts,
             watermark_column="dl_event_tms",
             cli_override=None,
+            domain=DOMAIN,
         )
 
     spec   = yaml.safe_load(new_sodacl)
@@ -362,6 +373,7 @@ def test_sostituzione_aliased_produce_colonna_qualificata():
             scan_ts=scan_ts,
             watermark_column="dl_event_tms",
             cli_override=None,
+            domain=DOMAIN,
         )
 
     spec  = yaml.safe_load(new_sodacl)
@@ -400,6 +412,7 @@ def test_due_check_con_alias_diversi_ricevono_prefissi_distinti():
             scan_ts=scan_ts,
             watermark_column="dl_event_tms",
             cli_override=None,
+            domain=DOMAIN,
         )
 
     spec    = yaml.safe_load(new_sodacl)
@@ -438,6 +451,7 @@ def test_mixed_bare_e_aliased_nello_stesso_campo():
             scan_ts=scan_ts,
             watermark_column="dl_event_tms",
             cli_override=None,
+            domain=DOMAIN,
         )
 
     query = yaml.safe_load(new_sodacl)["checks for silver_t"][0]["failed rows"]["fail query"]
@@ -466,6 +480,7 @@ def test_filter_nativo_aliased_preserva_la_condizione_business():
             scan_ts=scan_ts,
             watermark_column="dl_event_tms",
             cli_override=None,
+            domain=DOMAIN,
         )
 
     flt = yaml.safe_load(new_sodacl)["checks for silver_t"][0][
@@ -491,6 +506,7 @@ def test_contract_solo_aliased_e_rilevato_come_incrementale():
             scan_ts=scan_ts,
             watermark_column="dl_event_tms",
             cli_override=None,
+            domain=DOMAIN,
         )
 
     assert "xref__cns__ref_integrity" in per_check_wm
@@ -519,6 +535,7 @@ def test_alias_malformato_non_matcha_e_resta_nel_sodacl():
             scan_ts=scan_ts,
             watermark_column="dl_event_tms",
             cli_override=None,
+            domain=DOMAIN,
         )
 
     m.assert_not_called()
@@ -539,3 +556,72 @@ def test_guard_regex_rileva_placeholder_solo_aliased():
     assert "${INCREMENTAL_CONDITIONS}" not in sodacl_solo_aliased
     # ...mentre la regex usata da guard e detection lo rileva.
     assert incremental._INCREMENTAL_RE.search(sodacl_solo_aliased) is not None
+
+
+# ---------------------------------------------------------------------------
+# Policy di avanzamento watermark propagata al lookup
+# ---------------------------------------------------------------------------
+
+def test_policy_executed_passa_outcomes_estesi_al_lookup():
+    """Con policy 'executed' il lookup riceve advance_outcomes=('pass','warn','fail')."""
+    cfg     = _make_config(incremental_watermark_advance_policy="executed")
+    scan_ts = datetime(2026, 5, 27, 3, 0, 0)
+
+    with patch.object(
+        incremental, "_lookup_check_watermark", return_value=datetime(2026, 5, 26)
+    ) as m:
+        incremental._resolve_per_check_watermarks(
+            spark=None,
+            config=cfg,
+            contract=_make_contract(SODACL_MISTO),
+            scan_ts=scan_ts,
+            watermark_column="dl_event_tms",
+            cli_override=None,
+            domain=DOMAIN,
+        )
+
+    # advance_outcomes e' l'ultimo argomento posizionale del lookup
+    assert m.call_args_list, "il lookup avrebbe dovuto essere invocato"
+    for call in m.call_args_list:
+        assert call.args[-1] == ("pass", "warn", "fail")
+
+
+def test_policy_default_passa_solo_pass_al_lookup():
+    cfg     = _make_config()   # default pass_only
+    scan_ts = datetime(2026, 5, 27, 3, 0, 0)
+
+    with patch.object(
+        incremental, "_lookup_check_watermark", return_value=datetime(2026, 5, 26)
+    ) as m:
+        incremental._resolve_per_check_watermarks(
+            spark=None,
+            config=cfg,
+            contract=_make_contract(SODACL_MISTO),
+            scan_ts=scan_ts,
+            watermark_column="dl_event_tms",
+            cli_override=None,
+            domain=DOMAIN,
+        )
+
+    for call in m.call_args_list:
+        assert call.args[-1] == ("pass",)
+
+
+def test_policy_ignota_fa_fail_fast():
+    """Una policy non riconosciuta solleva ValueError prima di qualsiasi lookup."""
+    cfg     = _make_config(incremental_watermark_advance_policy="bogus")
+    scan_ts = datetime(2026, 5, 27, 3, 0, 0)
+
+    with patch.object(incremental, "_lookup_check_watermark") as m:
+        with pytest.raises(ValueError, match="incremental_watermark_advance_policy"):
+            incremental._resolve_per_check_watermarks(
+                spark=None,
+                config=cfg,
+                contract=_make_contract(SODACL_MISTO),
+                scan_ts=scan_ts,
+                watermark_column="dl_event_tms",
+                cli_override=None,
+                domain=DOMAIN,
+            )
+
+    m.assert_not_called()

@@ -34,6 +34,17 @@ class AppConfig:
     #   Minuti di lookback applicati a wm_from per coprire late arrivals.
     #   Solo per lookup automatico da Iceberg; non si applica a CLI/Airflow override.
     incremental_lookback_minutes: int = 0
+    #   Politica di avanzamento del watermark tra run incrementali consecutive.
+    #   Governa il filtro `outcome` del lookup su Iceberg (vedi
+    #   utils.incremental._lookup_check_watermark):
+    #     - "pass_only" (default, storico): il watermark avanza SOLO sulle run con
+    #       outcome='pass'. Warn e fail non lo fanno avanzare, quindi la finestra
+    #       viene riprocessata finche' il check non torna 'pass'.
+    #     - "executed": il watermark avanza per ogni check effettivamente ESEGUITO
+    #       (outcome in pass/warn/fail), dunque anche in warn/fail. Solo un check
+    #       che non viene eseguito (errore, nessun esito valido) non fa avanzare il
+    #       watermark.
+    incremental_watermark_advance_policy: str = "pass_only"
 
     #   Numero massimo di record falliti campionati per check e scritti nella
     #   tabella failed_records. Vale per entrambi i path di cattura: i sample dei
