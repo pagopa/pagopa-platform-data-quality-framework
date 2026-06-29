@@ -158,17 +158,6 @@ def main(argv: list[str] | None = None) -> None:
         argv=argv,
     )
 
-    # Se il database è disabilitato (es. esecuzione in locale/dev) il lookup 
-    # automatico su Iceberg non è affidabile/possibile. L'utente deve per forza
-    # passare la data di partenza, altrimenti fermiamo l'esecuzione prima di 
-    # accendere Spark.
-    if not config.results_write_enabled and args.watermark_from is None:
-        
-        logging.getLogger(__name__).error(
-            "Esecuzione in ambiente locale (results_write_enabled=False) argomento --watermark-from mancante."
-        )
-        sys.exit(1)
-
     run_pipeline(
         contract_path             = args.contract_path,
         repository                = args.repository,

@@ -89,11 +89,10 @@ def _lookup_check_watermark(
         ).collect()
         return row[0]["wm"] if row and row[0]["wm"] else None
     except Exception as e:
-        logger.warning(
-            f"Lookup watermark fallito per check='{check_name}' su {fqn}: {e}. "
-            f"Si procedera' in bootstrap."
-        )
-        return None
+        logger.error(f"Errore critico durante il lookup del watermark su {fqn}: {e}")
+        raise RuntimeError(
+            f"Impossibile leggere dalla tabella {fqn} e parametro --watermark-from mancante"
+        ) from e
 
 
 def _resolve_ts_literal_kind(
