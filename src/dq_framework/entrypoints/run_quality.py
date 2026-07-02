@@ -58,6 +58,10 @@ def _parse_primary_keys(value: str) -> list[str]:
     """
     return [pk.strip() for pk in value.split(",") if pk.strip()]
 
+def _parse_xref_datasets(value: str) -> list[str]:
+    """Parser argparse per --xref-datasets: lista separata da virgola."""
+    return [x.strip() for x in value.split(",") if x.strip()]
+
 
 def _parse_args(
     default_contract_path: str,
@@ -145,6 +149,12 @@ def _parse_args(
             "'after.id,merchant_id'). Se assente si usa la surrogata 'dl_id'."
         ),
     )
+    parser.add_argument(
+        "--xref-datasets",
+        type=_parse_xref_datasets,
+        default=None,
+        help="Lista di tabelle xref separate da virgola (con priorità rispetto al Data Contract)",
+    )
     return parser.parse_args(argv)
 
 
@@ -169,6 +179,7 @@ def main(argv: list[str] | None = None) -> None:
         watermark_column_override = args.watermark_column,
         watermark_from_override   = args.watermark_from,
         primary_keys              = args.primary_keys,
+        xref_datasets             = args.xref_datasets,
     )
 
 

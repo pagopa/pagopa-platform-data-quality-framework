@@ -49,11 +49,12 @@ def run_pipeline(
     watermark_column_override: Optional[str]       = None,
     watermark_from_override:   Optional[datetime]  = None,
     primary_keys:              Optional[list[str]] = None,
+    xref_datasets:             Optional[list[str]] = None,
 ) -> None:
     source_desc = f"{repository}@{ref}:{contract_path}" if repository else contract_path
     logger.info(f"Avvio pipeline Data Quality {domain.upper()} per: {source_desc}")
 
-    contract = parse_contract_file(contract_path, repository, ref, config)
+    contract = parse_contract_file(contract_path, repository, ref, config, xref_datasets_override=xref_datasets)
     if not contract:
         logger.error("Contract non valido o non trovato. Pipeline terminata.")
         return

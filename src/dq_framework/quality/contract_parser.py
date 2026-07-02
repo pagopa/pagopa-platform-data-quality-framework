@@ -113,6 +113,7 @@ def parse_contract_file(
     repository: str,
     ref: str,
     config: AppConfig,
+    xref_datasets_override: list[str] | None = None,
 ) -> dict | None:
     """Legge il Data Contract ed estrae la specifica SodaCL dal blocco 'quality'."""
     filepath, doc = read_contract_doc(contract_path, repository, ref, config)
@@ -132,8 +133,14 @@ def parse_contract_file(
         dataset = quality_block.get("dataset", "")
         raw_sodacl = quality_block.get("specification", "")
 
+        # Lettura originale dal Data Contract
         xref_datasets_raw = quality_block.get("xref-dataset", [])
         xref_datasets = xref_datasets_raw if isinstance(xref_datasets_raw, list) else [xref_datasets_raw]
+
+        # SE IL DAG HA PASSATO UN OVERRIDE, APPLICALO CON PRIORITÀ
+        if xref_datasets_override is not None:
+            logger.info(f"Applicato override xref-dataset da DAG: {xref_datasets_override}")
+            xref_datasets = xref_datasets_override
 
         if not dataset or not raw_sodacl:
             logger.error(f"File saltato '{filepath}': 'dataset' o 'specification' mancanti nel blocco 'quality'.")
