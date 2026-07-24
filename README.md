@@ -103,6 +103,46 @@ I target coprono tipicamente:
 
 ---
 
+## Deploy su CDE
+
+Per effettuare il deploy del framework su Cloudera Data Engineering (CDE) è disponibile lo script `scripts/deploy.sh`. Lo script si occupa di compilare il pacchetto Python (`.whl`), caricare le risorse (wheel e `launcher.py`) su CDE e creare/aggiornare il job.
+
+### Prerequisiti
+
+Prima di lanciare lo script è necessario assicurarsi di avere (una tantum):
+1. `cde` CLI installato e autenticato nel proprio ambiente locale.
+2. Risorsa Python env `dq-framework-pyenv-<env>` già creata sul vcluster CDE.
+3. Workload credential `github-token` configurata sul vcluster.
+4. Pacchetto Python `build` installato localmente (`pip install build`).
+5. Migrazione DDL applicata sulla tabella results dell'ambiente (script: `migrations/001_add_watermark_columns.sql`).
+
+### Utilizzo
+
+```bash
+./scripts/deploy.sh <ENV> <CDE_VCLUSTER_ENDPOINT> <CDE_CONFIG_PROFILE> [--run]
+```
+
+Gli ambienti (`<ENV>`) supportati per il deploy sono:
+- `test`: deploy/run su vcluster CDE
+- `dev-github`: deploy/run su vcluster CDE leggendo contract da GitHub
+- `prod`: deploy/run in produzione
+
+> **Nota:** l'ambiente `dev` gira solo all'interno del Dev Container locale e non è deployabile su CDE.
+
+### Esempi
+
+**Deploy in ambiente test (senza esecuzione immediata):**
+```bash
+./scripts/deploy.sh test https://<vcluster>.cloudera.site/dex/api/v1 default
+```
+
+**Deploy e lancio immediato in produzione:**
+```bash
+./scripts/deploy.sh prod https://<vcluster>.cloudera.site/dex/api/v1 default --run
+```
+
+---
+
 ## Maintainer
 
 Made with ❤️ by PagoPa S.p.A.
