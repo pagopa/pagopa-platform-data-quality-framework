@@ -95,14 +95,14 @@ def extract_and_clean_failed_queries(sodacl_yaml: str) -> tuple[str, dict[str, d
                     None,
                 )
 
-                if not (check_name and query_key and isinstance(fields, str) and fields.strip()):
+                if not (check_name and query_key and isinstance(fields_raw, str) and fields_raw.strip()):
                     logger.warning(
                         f"'failed-query-fields' ignorato: name/query/fields mancanti o "
                         f"vuoti (check='{check_name}', query_key={query_key!r})."
                     )
                     continue
 
-                extracted[check_name] = {"query": check_body[query_key], "fields": fields}
+                extracted[check_name] = {"query": check_body[query_key], "fields": fields_raw}
 
     cleaned_yaml = yaml.safe_dump(spec_dict, sort_keys=False, allow_unicode=True)
     return cleaned_yaml, extracted
