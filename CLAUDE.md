@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Data Quality framework for the PagoPa CDP platform. Reads **Data Contract** YAML files (locally or from GitHub), converts the embedded quality rules to **SodaCL** via `datacontract-cli`, runs the Soda scan against a Spark DataFrame, and writes structured results to an Iceberg table (and optionally to Soda Cloud).
+Data Quality framework for the PagoPa CDP platform. Reads **Data Contract** YAML files (locally or from GitHub) whose quality rules are written directly as **SodaCL** in the `quality.specification` block and read as-is — `datacontract-cli` was removed (commit `863ab54`) and there is no conversion step. It then runs the Soda scan against a Spark DataFrame and writes structured results to two Iceberg tables (a granular results log and a failed-records detail table), optionally sending aggregate metrics only to Soda Cloud.
 
 The deliverable is a wheel deployed to **CDE** (Cloudera Data Engineering) and invoked via `spark-submit`, typically orchestrated by Airflow.
 
