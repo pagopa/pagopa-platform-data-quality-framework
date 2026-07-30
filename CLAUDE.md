@@ -26,8 +26,14 @@ Manual entrypoint invocation (used on CDE via `spark-submit launcher.py ...`):
 
 ```bash
 ENV=dev python -m dq_framework.entrypoints.run_quality \
+  --domain gpd --table-scope silver \
   --contract-path src/data/.../dc-foo.yaml --repository owner/repo --ref main
 ```
+
+`--domain` and `--table-scope` are both **required**: together they name the output
+tables (`{table_scope}_dqf_{domain}_results` / `_failed_records`). Both are validated
+as plain SQL identifiers (`^[a-z][a-z0-9_]*$`, lowercased) because they are
+interpolated straight into the FQN and the `LOCATION` clause.
 
 Note: the CI lint gate is `ruff check .` (`.github/workflows/dq_framework_ci.yml`, `line-length = 120` from `pyproject.toml`); CI does **not** run pytest. The Makefile `make lint` target still calls `flake8`, which is *not* what CI enforces — lint with `ruff check .` to match CI.
 
@@ -40,20 +46,20 @@ Note: the CI lint gate is `ruff check .` (`.github/workflows/dq_framework_ci.yml
 
 ### Environment-driven config
 
-`dq_framework.common.config.load_config()` reads `ENV` (default `dev`) and returns a frozen `AppConfig` dataclass picked from a registry: `dev` (local contract + local data), `dev-github` (contract fetched from GitHub API), `prod`. Each is defined in its own file under `common/config/`. `AppConfig` controls: default `contract_path`/`repository`/`ref`, Soda host & `data_source`, `table_limit`, and the Iceberg results sink (`results_database`, `results_table`, `results_table_location`, `results_write_enabled`). CLI flags override the env defaults; if `results_write_enabled=False` results are only logged.
+`dq_framework.common.config.load_config()` reads `ENV` (default `dev`) and returns a frozen `AppConfig` dataclass picked from a registry: `dev` (local contract + local data), `dev-github` (contract fetched from GitHub API), `prod`. Each is defined in its own file under `common/config/`. `AppConfig` controls: default `contract_path`/`repository`/`ref`, Soda host & `data_source`, `table_limit`, and the Iceberg results sink (`results_database`, `results_table_location`, `results_write_enabled`). The *names* of the two sink tables are not in `AppConfig`: they are composed at runtime as `{results_database}.{table_scope}_dqf_{domain}_{results|failed_records}` from the required `--table-scope`/`--domain` CLI flags. CLI flags override the env defaults; if `results_write_enabled=False` results are only logged.
 
 ### Quality pipeline flow (`quality/engine.py::run_pipeline`)
 
 `run_pipeline` is a thin orchestrator: it only calls functions, the logic lives in the leaf modules below.
 
 1. `contract_parser.parse_contract_file` — delegates I/O to `contract_reader.read_contract_doc` (local path or GitHub Contents API, base64-decoded, `GITHUB_TOKEN` from `common.secrets`), then extracts metadata, `dataset`, `table_name` and the normalized SodaCL. Returns a dict (no checks pre-extracted).
-2. `utils.incremental.apply_incremental_conditions` — if the SodaCL contains `${INCREMENTAL_CONDITIONS}`, resolves the per-check watermark (CLI override → Iceberg `pass` lookup → epoch bootstrap) and substitutes it; otherwise a no-op.
+2. `utils.incremental.apply_incremental_conditions` — if the SodaCL contains `${INCREMENTAL_CONDITIONS}`, resolves the per-check watermark (CLI override → Iceberg `pass` lookup → epoch bootstrap) and substitutes it; otherwise a no-op. The lookup reads the same `{table_scope}_dqf_{domain}_results` table the writer targets, so two scopes have independent watermarks. If the lookup *query* fails (missing table, e.g. right after a rename) there is no fallback: it raises `RuntimeError` and the operator must pass `--watermark-from`.
 3. `contract_parser.extract_and_clean_failed_queries` — pulls the deferred `failed query fields` out of the SodaCL **after** watermark substitution (so the saved query has resolved timestamps).
 4. `init_spark(app_name=...)` — `SparkSession` with `enableHiveSupport()`, app name derived from the contract (`gpd_quality_<table_name>`).
 5. `soda_executor.run_dataframe_soda_scan` — loads the table (and xref) via `_load_view`, injects a `MemorySampler` (failed rows captured on-prem; Soda Cloud `samples_limit` forced to 0 so no record samples are uploaded), runs the scan.
 6. `result_writer.process_scan_results` — flattens Soda outcomes into rows matching `RESULTS_SCHEMA` (`run_id`, Airflow context, dataset, check metadata, measured values, row counts, watermark columns). `dag_id` is `NOT NULL`; falls back to `manual:{env}`.
-7. `result_writer.write_results_to_iceberg` — `CREATE TABLE IF NOT EXISTS` (Iceberg, partitioned by `execution_date`, merge-on-read) then `df.writeTo(fqn).append()`. Skipped when `results_write_enabled=False`.
-8. `result_writer.run_manual_failed_queries` + `process_and_write_failed_records` — re-run the deferred failed-row queries and persist the offending records to the `dqf_gpd_failed_records` Iceberg table. The primary keys come from the `--primary-keys` CLI flag (surrogate `dl_id` if absent).
+7. `result_writer.write_results_to_iceberg` — `CREATE TABLE IF NOT EXISTS` on `{table_scope}_dqf_{domain}_results` (Iceberg, partitioned by `execution_date`, merge-on-read) then `df.writeTo(fqn).append()`. Skipped when `results_write_enabled=False`. When `results_table_location` is set, the `table_scope` prefix must appear in the directory name too, otherwise two scopes would share one warehouse directory.
+8. `result_writer.run_manual_failed_queries` + `process_and_write_failed_records` — re-run the deferred failed-row queries and persist the offending records to the `{table_scope}_dqf_{domain}_failed_records` Iceberg table. The primary keys come from the `--primary-keys` CLI flag (surrogate `dl_id` if absent).
 
 Auxiliary modules live under `quality/utils/`: logging summaries in `utils/result_logging`, incremental watermark logic in `utils/incremental`. There is no Impala execution path.
 

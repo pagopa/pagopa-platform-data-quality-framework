@@ -87,7 +87,7 @@ def extract_and_clean_failed_queries(sodacl_yaml: str) -> tuple[str, dict[str, d
                 if "failed-query-fields" not in check_body:
                     continue
 
-                fields = check_body.pop("failed-query-fields")
+                fields_raw = check_body.pop("failed-query-fields")
                 check_name = check_body.get("name")
                 # Chiave della query massiva (es. 'mio_check query')
                 query_key = next(

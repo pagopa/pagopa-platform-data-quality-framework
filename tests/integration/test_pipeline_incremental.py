@@ -115,6 +115,17 @@ def setup_source_table(spark: SparkSession) -> None:
 # Helper: config di test
 # ---------------------------------------------------------------------------
 
+# Il framework compone il nome delle tabelle di output come
+# {results_database}.{table_scope}_dqf_{domain}_{results|failed_records}: qui il
+# target e' quindi pagopa.silver_dqf_integration_results.
+DOMAIN = "integration"
+SCOPE  = "silver"
+
+
+def _results_fqn(config: AppConfig) -> str:
+    return f"{config.results_database}.{SCOPE}_dqf_{DOMAIN}_results"
+
+
 def _make_test_config() -> AppConfig:
     return AppConfig(
         env                   = "test",
@@ -126,7 +137,6 @@ def _make_test_config() -> AppConfig:
         data_source           = "dqf_integration",
         table_limit           = 0,
         results_database      = "pagopa",
-        results_table         = "dqf_integration_results",
         results_write_enabled = True,
     )
 
@@ -175,10 +185,10 @@ def test_pipeline_incrementale_due_run_consecutive(spark, setup_source_table, mo
     # crea la tabella al primo write e fa append automatico ai successivi.
     # La logica del framework che vogliamo testare (parsing, lookup, sostituzione,
     # riuso watermark) e' identica perche' il lookup SQL e' ANSI-standard.
-    def fake_write_results(spark_, df_results, config_):
+    def fake_write_results(spark_, df_results, config_, domain_, table_scope_):
         if not config_.results_write_enabled:
             return
-        fqn = f"{config_.results_database}.{config_.results_table}"
+        fqn = f"{config_.results_database}.{table_scope_}_dqf_{domain_}_results"
         df_results.write.mode("append").format("parquet").saveAsTable(fqn)
 
     monkeypatch.setattr(engine, "write_results_to_iceberg", fake_write_results)
@@ -199,7 +209,7 @@ def test_pipeline_incrementale_due_run_consecutive(spark, setup_source_table, mo
     monkeypatch.setattr(spark, "stop", lambda: None)
 
     # Cleanup di eventuali run precedenti (idempotenza tra esecuzioni pytest)
-    spark.sql(f"DROP TABLE IF EXISTS {cfg.results_database}.{cfg.results_table}")
+    spark.sql(f"DROP TABLE IF EXISTS {_results_fqn(cfg)}")
 
     # --- Prima run: nessun watermark precedente, bootstrap ----------------
     engine.run_pipeline(
@@ -207,6 +217,8 @@ def test_pipeline_incrementale_due_run_consecutive(spark, setup_source_table, mo
         repository    = "",
         ref           = "main",
         config        = cfg,
+        domain        = DOMAIN,
+        table_scope   = SCOPE,
     )
 
     # Il SodaCL passato a fake_scan deve avere il placeholder gia' sostituito
@@ -217,7 +229,7 @@ def test_pipeline_incrementale_due_run_consecutive(spark, setup_source_table, mo
     assert "TIMESTAMP '1970-01-01" in captured_sodacl[0]
 
     # Verifica scritta su tabella results
-    fqn = f"{cfg.results_database}.{cfg.results_table}"
+    fqn = _results_fqn(cfg)
     df = spark.sql(f"SELECT check_name, outcome, watermark_column, "
                    f"watermark_from, watermark_to FROM {fqn}").collect()
     by_name = {r["check_name"]: r for r in df}
@@ -246,6 +258,8 @@ def test_pipeline_incrementale_due_run_consecutive(spark, setup_source_table, mo
         repository    = "",
         ref           = "main",
         config        = cfg,
+        domain        = DOMAIN,
+        table_scope   = SCOPE,
     )
 
     # Adesso wm_from NON e' piu' epoch ma il wm_to del run precedente

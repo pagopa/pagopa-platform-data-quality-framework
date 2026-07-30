@@ -3,15 +3,21 @@ Entrypoint CDE per il job di Data Quality.
 
 Invocazione tipica su CDE:
     spark-submit launcher.py \
+      --domain gpd \
+      --table-scope silver \
       --contract-path src/data/pagopa/gpd/silver/dc-gpd-payment_option.yaml \
       --repository carlomanco-qty/qty-data-contracts \
       --ref main
 
-Ognuno dei tre argomenti è opzionale: se omesso viene usato il valore di default
-definito in AppConfig per l'ambiente corrente (ENV).
+--domain e --table-scope sono obbligatori: insieme compongono i nomi delle
+tabelle di output ({table_scope}_dqf_{domain}_results e
+{table_scope}_dqf_{domain}_failed_records). Ognuno degli altri tre argomenti è
+opzionale: se omesso viene usato il valore di default definito in AppConfig per
+l'ambiente corrente (ENV).
 
 Invocazione da Airflow DAG:
     spark-submit dq_framework.whl --entrypoint run_quality \
+      --domain gpd --table-scope silver \
       --contract-path /path/to/contracts/gpd/silver_table.yaml
       --repository carlomanco-qty/qty-data-contracts \
       --ref main
@@ -21,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 from datetime import datetime
 
@@ -28,6 +35,29 @@ from dq_framework.common.config import load_config
 from dq_framework.common.logging import setup_logging
 from dq_framework.quality.engine import run_pipeline
 import logging
+
+_SQL_IDENTIFIER_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+
+
+def _parse_sql_identifier(value: str) -> str:
+    """Parser argparse per --domain e --table-scope.
+
+    Normalizza (strip + lower) e valida che il valore sia un identificatore SQL
+    semplice. Serve perche' i due parametri finiscono interpolati sia nel nome
+    della tabella ({table_scope}_dqf_{domain}_results) sia nella clausola
+    LOCATION: un valore con un punto produrrebbe un FQN a tre parti, che Spark
+    interpreta come catalog.database.table e che quindi scriverebbe su un
+    database diverso senza alcun errore; spazi o maiuscole creerebbero una
+    seconda tabella parallela a quella attesa.
+    """
+    normalized = value.strip().lower()
+    if not _SQL_IDENTIFIER_RE.match(normalized):
+        raise argparse.ArgumentTypeError(
+            f"Valore non valido: {value!r}. Ammessi solo identificatori SQL semplici "
+            f"(minuscole, cifre e underscore, iniziale alfabetica), es. 'gpd', 'silver'."
+        )
+    return normalized
+
 
 def _parse_iso_datetime(value: str) -> datetime:
     """Parser argparse per --watermark-from. Accetta ISO 8601 con o senza microsecondi.
@@ -74,9 +104,25 @@ def _parse_args(
     parser.add_argument(
         "--domain",
         required=True,
+        type=_parse_sql_identifier,
         help="Dominio dei dati che determina le tabelle di output (es. gpd, fdr, bpd)",
     )
-    
+
+    parser.add_argument(
+        "--table-scope",
+        required=True,
+        type=_parse_sql_identifier,
+        help=(
+            "Scope delle tabelle di output, tipicamente il layer del Data Lake "
+            "(es. silver, gold). Prefissa entrambe le tabelle: "
+            "'{table_scope}_dqf_{domain}_results' e "
+            "'{table_scope}_dqf_{domain}_failed_records'. Lo stesso prefisso e' "
+            "usato dal lookup del watermark incrementale, quindi due scope "
+            "distinti hanno storici e watermark indipendenti."
+        ),
+    )
+
+
     parser.add_argument(
         "--contract-path",
         default=default_contract_path,
@@ -174,6 +220,7 @@ def main(argv: list[str] | None = None) -> None:
         ref                       = args.ref,
         config                    = config,
         domain                    = args.domain,
+        table_scope               = args.table_scope,
         dag_id                    = args.dag_id,
         airflow_run_id            = args.airflow_run_id,
         watermark_column_override = args.watermark_column,

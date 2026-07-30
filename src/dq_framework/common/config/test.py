@@ -13,6 +13,6 @@ TEST_CONFIG = AppConfig(
     results_write_enabled=True,
     # se la tabella esiste già in metastore, lasciare None: la CREATE TABLE IF NOT EXISTS sarà
     # comunque no-op. Valorizzare solo se si vuole che il primo run la crei su un path S3 specifico,
-    # es. "s3a://pdnd-prod-dl-1/warehouse/tablespace/external/hive/pagopa_qa.db/dqf_gpd_results"
+    # es. "s3a://pdnd-prod-dl-1/warehouse/tablespace/external/hive/pagopa_qa.db/silver_dqf_gpd_results"
     results_table_location=None,
 )

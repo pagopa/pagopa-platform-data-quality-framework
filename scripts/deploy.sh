@@ -88,10 +88,24 @@ JOB="dq-quality-${ENV_NAME}"
 PYENV="dq-framework-pyenv-${ENV_NAME}"
 
 # ----- Argomenti del job (entrypoint run_quality) ----------------------------
-# Niente di hardcoded sul contract: vengono lasciati ai default di AppConfig
-# (definiti in common/config/<env>.py). Sovrascrivibili una tantum da CLI
-# aggiungendo --arg "--contract-path=..." prima del lancio se serve.
-JOB_ARGS=()
+# Vengono scritti nella definizione del job su CDE, quindi valgono per OGNI run
+# e sovrascrivono i default di AppConfig (common/config/<env>.py). Tenerli qui e
+# non solo nella UI di CDE e' necessario perche' `cde job update` riscrive la
+# spec del job: argomenti impostati a mano dalla UI verrebbero persi al deploy
+# successivo. Il DAG puo' comunque sovrascriverli per singolo run.
+JOB_ARGS=(
+    --arg "--domain=gpd"
+    --arg "--table-scope=silver"
+    --arg "--contract-path=src/data/pagopa/gpd/silver/transfer.yaml"
+    --arg "--repository=carlomanco-qty/qty-data-contracts"
+    --arg "--ref=main"
+    # BOOTSTRAP: forza wm_from su TUTTI i check incrementali bypassando il lookup
+    # su Iceberg. Serve solo al primo run di un ambiente, dove la tabella results
+    # non esiste ancora e il lookup farebbe fail-fast. RIMUOVERE dopo il primo run
+    # verde: se resta, ogni run riparte dal 2026-07-01 e la finestra incrementale
+    # cresce senza limite invece di avanzare.
+    --arg "--watermark-from=2026-07-01T13:00:00"
+)
 
 # ----- Sanity check tooling ---------------------------------------------------
 command -v cde     >/dev/null 2>&1 || { echo "ERRORE: 'cde' CLI non trovata in PATH"; exit 1; }
