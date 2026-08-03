@@ -3,7 +3,7 @@
 Verifica:
     - query SQL emessa filtra dataset/check_name, gli outcome della policy e
       watermark_to IS NOT NULL
-    - la FQN interrogata e' prefissata dal table_scope (isolamento per layer)
+    - la FQN interrogata e' prefissata dal dl_layer (isolamento per layer)
     - policy "pass_only" -> outcome IN ('pass'); "executed" -> ('pass','warn','fail')
     - eccezioni sulla query NON sono catturate: fail-fast con RuntimeError, cosi'
       una tabella assente non diventa un riprocessamento integrale silenzioso
@@ -25,7 +25,7 @@ from dq_framework.quality.utils.incremental import (
 )
 
 DOMAIN = "gpd"
-SCOPE = "silver"
+DL_LAYER = "silver"
 
 
 def _make_config(**overrides) -> AppConfig:
@@ -64,7 +64,7 @@ def test_restituisce_il_max_watermark_quando_presente():
     wm = datetime(2026, 5, 26, 0, 0, 0)
     spark = _spark_returning(wm)
 
-    result = _lookup_check_watermark(spark, cfg, "silver_t", "check_a", DOMAIN, SCOPE)
+    result = _lookup_check_watermark(spark, cfg, "silver_t", "check_a", DOMAIN, DL_LAYER)
 
     assert result == wm
 
@@ -73,7 +73,7 @@ def test_restituisce_none_se_il_max_e_null():
     cfg = _make_config()
     spark = _spark_returning(None)
 
-    result = _lookup_check_watermark(spark, cfg, "silver_t", "check_a", DOMAIN, SCOPE)
+    result = _lookup_check_watermark(spark, cfg, "silver_t", "check_a", DOMAIN, DL_LAYER)
 
     assert result is None
 
@@ -86,7 +86,7 @@ def test_eccezione_sulla_query_propaga_runtime_error():
     spark = _spark_raising(RuntimeError("Table not found: db_test.silver_dqf_gpd_results"))
 
     with pytest.raises(RuntimeError, match="--watermark-from"):
-        _lookup_check_watermark(spark, cfg, "silver_t", "check_a", DOMAIN, SCOPE)
+        _lookup_check_watermark(spark, cfg, "silver_t", "check_a", DOMAIN, DL_LAYER)
 
 
 def test_query_forma_base_filtra_dataset_check_e_watermark_not_null():
@@ -95,7 +95,7 @@ def test_query_forma_base_filtra_dataset_check_e_watermark_not_null():
     cfg = _make_config()
     spark = _spark_returning(datetime(2026, 5, 26, 0, 0, 0))
 
-    _lookup_check_watermark(spark, cfg, "silver_t", "check_a", DOMAIN, SCOPE)
+    _lookup_check_watermark(spark, cfg, "silver_t", "check_a", DOMAIN, DL_LAYER)
 
     sql_emitted = spark.sql.call_args[0][0]
     assert "db_test.silver_dqf_gpd_results" in sql_emitted
@@ -104,9 +104,9 @@ def test_query_forma_base_filtra_dataset_check_e_watermark_not_null():
     assert "watermark_to IS NOT NULL" in sql_emitted
 
 
-def test_table_scope_cambia_la_tabella_interrogata():
-    """Il table_scope prefissa la FQN del lookup: due scope diversi leggono da
-    tabelle diverse, quindi i watermark dei layer restano indipendenti."""
+def test_dl_layer_cambia_la_tabella_interrogata():
+    """Il dl_layer prefissa la FQN del lookup: due layer diversi leggono da
+    tabelle diverse, quindi i loro watermark restano indipendenti."""
     cfg = _make_config()
     spark = _spark_returning(datetime(2026, 5, 26, 0, 0, 0))
 
@@ -120,7 +120,7 @@ def test_default_outcomes_filtra_solo_pass():
     cfg = _make_config()
     spark = _spark_returning(datetime(2026, 5, 26, 0, 0, 0))
 
-    _lookup_check_watermark(spark, cfg, "silver_t", "check_a", DOMAIN, SCOPE)
+    _lookup_check_watermark(spark, cfg, "silver_t", "check_a", DOMAIN, DL_LAYER)
 
     sql_emitted = spark.sql.call_args[0][0]
     assert "outcome IN ('pass')" in sql_emitted
@@ -134,7 +134,7 @@ def test_policy_executed_include_warn_e_fail_nel_filtro():
     spark = _spark_returning(datetime(2026, 5, 26, 0, 0, 0))
 
     _lookup_check_watermark(
-        spark, cfg, "silver_t", "check_a", DOMAIN, SCOPE,
+        spark, cfg, "silver_t", "check_a", DOMAIN, DL_LAYER,
         advance_outcomes=("pass", "warn", "fail"),
     )
 

@@ -95,7 +95,7 @@ PYENV="dq-framework-pyenv-${ENV_NAME}"
 # successivo. Il DAG puo' comunque sovrascriverli per singolo run.
 JOB_ARGS=(
     --arg "--domain=gpd"
-    --arg "--table-scope=silver"
+    --arg "--dl-layer=silver"
     --arg "--contract-path=src/data/pagopa/gpd/silver/transfer.yaml"
     --arg "--repository=carlomanco-qty/qty-data-contracts"
     --arg "--ref=main"

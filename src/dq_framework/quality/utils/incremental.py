@@ -62,7 +62,7 @@ def _lookup_check_watermark(
     dataset: str,
     check_name: str,
     domain: str,
-    table_scope: str,
+    dl_layer: str,
     advance_outcomes: tuple[str, ...] = ("pass",),
 ) -> Optional[datetime]:
     """Restituisce il massimo `watermark_to` registrato per il check specificato.
@@ -73,9 +73,9 @@ def _lookup_check_watermark(
     con `executed` -> ('pass','warn','fail') anche warn/fail lo fanno avanzare,
     mentre i check non eseguiti (nessun outcome valido) restano comunque esclusi.
 
-    Il lookup avviene sulla tabella scopata `{table_scope}_dqf_{domain}_results`,
-    la stessa su cui scrive `result_writer`: due `table_scope` distinti (es. silver
-    e gold) hanno quindi storici e watermark completamente indipendenti.
+    Il lookup avviene sulla tabella `{dl_layer}_dqf_{domain}_results`, la stessa
+    su cui scrive `result_writer`: due `dl_layer` distinti (es. silver e gold)
+    hanno quindi storici e watermark completamente indipendenti.
 
     Se la query gira ma non trova righe utili ritorna None e il chiamante applica
     il bootstrap all'epoch. Se invece la query stessa fallisce (tabella assente,
@@ -84,7 +84,7 @@ def _lookup_check_watermark(
     integrale. In quel caso l'operatore deve passare --watermark-from.
     """
     outcome_in = ", ".join(f"'{o}'" for o in advance_outcomes)
-    fqn = f"{config.results_database}.{table_scope}_dqf_{domain}_results"
+    fqn = f"{config.results_database}.{dl_layer}_dqf_{domain}_results"
     try:
         row = spark.sql(
             f"""
@@ -180,7 +180,7 @@ def _resolve_per_check_watermarks(
     watermark_column: str,
     cli_override: Optional[datetime],
     domain: str,
-    table_scope: str,
+    dl_layer: str,
 ) -> tuple[str, dict[str, datetime]]:
     """Walk del SodaCL con sostituzione per-check del placeholder.
 
@@ -234,7 +234,7 @@ def _resolve_per_check_watermarks(
                     source = "cli"
                 else:
                     looked_up = _lookup_check_watermark(
-                        spark, config, contract["table_name"], check_name, domain, table_scope,
+                        spark, config, contract["table_name"], check_name, domain, dl_layer,
                         advance_outcomes,
                     )
                     if looked_up is not None:
@@ -298,7 +298,7 @@ def apply_incremental_conditions(
     watermark_column_override: Optional[str],
     watermark_from_override: Optional[datetime],
     domain: str,
-    table_scope: str,
+    dl_layer: str,
 ) -> tuple[str, dict[str, datetime], Optional[str]]:
     """Entry pubblico: se il SodaCL contiene il placeholder, risolve i watermark
     per-check e lo sostituisce; altrimenti è un no-op.
@@ -331,6 +331,6 @@ def apply_incremental_conditions(
         watermark_column = effective_watermark_column,
         cli_override     = watermark_from_override,
         domain           = domain,
-        table_scope      = table_scope,
+        dl_layer         = dl_layer,
     )
     return new_sodacl, per_check_wm, effective_watermark_column

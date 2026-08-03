@@ -44,7 +44,7 @@ def run_pipeline(
     ref:                       str,
     config:                    AppConfig,
     domain:                    str,
-    table_scope:               str,
+    dl_layer:                  str,
     dag_id:                    Optional[str]       = None,
     airflow_run_id:            Optional[str]       = None,
     watermark_column_override: Optional[str]       = None,
@@ -54,7 +54,7 @@ def run_pipeline(
 ) -> None:
     source_desc = f"{repository}@{ref}:{contract_path}" if repository else contract_path
     logger.info(
-        f"Avvio pipeline Data Quality {domain.upper()} (table_scope={table_scope}) per: {source_desc}"
+        f"Avvio pipeline Data Quality {domain.upper()} (dl_layer={dl_layer}) per: {source_desc}"
     )
 
     contract = parse_contract_file(contract_path, repository, ref, config, xref_datasets_override=xref_datasets)
@@ -76,7 +76,7 @@ def run_pipeline(
     # Controlli incrementali: l'intero blocco watermark collassa in una chiamata.
     contract["sodacl"], per_check_wm, effective_watermark_column = apply_incremental_conditions(
         spark, config, contract, scan_ts, watermark_column_override, watermark_from_override,
-        domain, table_scope,
+        domain, dl_layer,
     )
 
     # Estrazione delle failed-query DOPO la sostituzione watermark, così la query
@@ -124,11 +124,11 @@ def run_pipeline(
         log_results_summary(df_results)
 
         # DB 1: tabella aggregata (results)
-        write_results_to_iceberg(spark, df_results, config, domain, table_scope)
+        write_results_to_iceberg(spark, df_results, config, domain, dl_layer)
 
         # DB 2: tabella operativa di dettaglio (failed records)
         process_and_write_failed_records(
-            spark, final_result_rows, sampler, config, effective_primary_keys, domain, table_scope
+            spark, final_result_rows, sampler, config, effective_primary_keys, domain, dl_layer
         )
     else:
         logger.warning("Nessun risultato elaborato.")

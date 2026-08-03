@@ -137,7 +137,7 @@ def process_scan_results(
     wm_to:             Optional[datetime]               = None,
 ) -> list[Row]:
     """Elabora i risultati dello scan Soda trasformandoli in Row PySpark
-    conformi allo schema della tabella Iceberg {table_scope}_dqf_{domain}_results.
+    conformi allo schema della tabella Iceberg {dl_layer}_dqf_{domain}_results.
 
     Le colonne watermark vengono valorizzate solo per i check incrementali
     (quelli il cui `check_name` compare in `per_check_wm_from`); per i massivi
@@ -240,15 +240,15 @@ TBLPROPERTIES (
 
 
 def _ensure_results_table(
-    spark: SparkSession, config: AppConfig, fqn: str, domain: str, table_scope: str
+    spark: SparkSession, config: AppConfig, fqn: str, domain: str, dl_layer: str
 ) -> None:
     location_clause = ""
     if config.results_table_location:
-        # Il prefisso table_scope deve comparire anche nella directory, non solo
+        # Il prefisso dl_layer deve comparire anche nella directory, non solo
         # nel nome tabella: altrimenti silver_dqf_x_results e gold_dqf_x_results
         # punterebbero alla stessa cartella, condividendone i metadata Iceberg.
         base_loc = config.results_table_location.rsplit("/", 1)[0]
-        location_clause = f"LOCATION '{base_loc}/{table_scope}_dqf_{domain}_results'"
+        location_clause = f"LOCATION '{base_loc}/{dl_layer}_dqf_{domain}_results'"
 
 
     ddl = _RESULTS_TABLE_DDL.format(fqn=fqn, location_clause=location_clause)
@@ -257,7 +257,7 @@ def _ensure_results_table(
 
 
 def write_results_to_iceberg(
-    spark: SparkSession, df_results: DataFrame, config: AppConfig, domain: str, table_scope: str
+    spark: SparkSession, df_results: DataFrame, config: AppConfig, domain: str, dl_layer: str
 ) -> None:
     if not config.results_write_enabled:
         logger.info(
@@ -265,10 +265,10 @@ def write_results_to_iceberg(
         )
         return
 
-    fqn = f"{config.results_database}.{table_scope}_dqf_{domain}_results"
+    fqn = f"{config.results_database}.{dl_layer}_dqf_{domain}_results"
     logger.info(f"Scrittura risultati su tabella Iceberg principale: {fqn}")
     try:
-        _ensure_results_table(spark, config, fqn, domain, table_scope)
+        _ensure_results_table(spark, config, fqn, domain, dl_layer)
         df_results.writeTo(fqn).append()
         logger.info(f"Scrittura completata: {df_results.count()} record inseriti in {fqn}.")
     except Exception as e:
@@ -303,13 +303,13 @@ TBLPROPERTIES (
 
 
 def _ensure_failed_records_table(
-    spark: SparkSession, config: AppConfig, fqn: str, domain: str, table_scope: str
+    spark: SparkSession, config: AppConfig, fqn: str, domain: str, dl_layer: str
 ) -> None:
     failed_loc_clause = ""
     if config.results_table_location:
         # Vedi _ensure_results_table: il prefisso serve anche nella directory.
         base_loc = config.results_table_location.rsplit("/", 1)[0]
-        failed_loc_clause = f"LOCATION '{base_loc}/{table_scope}_dqf_{domain}_failed_records'"
+        failed_loc_clause = f"LOCATION '{base_loc}/{dl_layer}_dqf_{domain}_failed_records'"
 
     ddl = _FAILED_RECORDS_TABLE_DDL.format(fqn=fqn, location_clause=failed_loc_clause)
     spark.sql(ddl)
@@ -411,7 +411,7 @@ def process_and_write_failed_records(
     config: AppConfig,
     primary_keys: list[str],
     domain: str,
-    table_scope: str,
+    dl_layer: str,
 ) -> None:
     """Converte i campioni in RAM dal MemorySampler in un DataFrame e li salva su Iceberg.
 
@@ -422,8 +422,8 @@ def process_and_write_failed_records(
         return
 
     pk_cols = primary_keys or ["dl_id"]
-    fqn = f"{config.results_database}.{table_scope}_dqf_{domain}_failed_records"
-    _ensure_failed_records_table(spark, config, fqn, domain, table_scope)
+    fqn = f"{config.results_database}.{dl_layer}_dqf_{domain}_failed_records"
+    _ensure_failed_records_table(spark, config, fqn, domain, dl_layer)
 
     failed_rows_list = []
 

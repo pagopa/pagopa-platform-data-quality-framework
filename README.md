@@ -4,7 +4,7 @@ Framework di Data Quality per la piattaforma PagoPa CDP: esegue sui dati del Dat
 
 ## Overview
 
-Un **Data Contract** è un file YAML che descrive una tabella silver e, nel blocco `quality`, ne porta con sé i controlli di qualità già scritti in **SodaCL**. Il framework legge il contratto (da file locale o da GitHub), esegue quei controlli con Soda su un DataFrame Spark che punta alla tabella, e scrive gli esiti in due tabelle Iceberg: un log granulare per esecuzione (`<table_scope>_dqf_<dominio>_results`) e il dettaglio dei record scartati (`<table_scope>_dqf_<dominio>_failed_records`). Se sono configurate le credenziali Soda Cloud, alla dashboard vengono inviate solo le metriche aggregate, mai i record.
+Un **Data Contract** è un file YAML che descrive una tabella silver e, nel blocco `quality`, ne porta con sé i controlli di qualità già scritti in **SodaCL**. Il framework legge il contratto (da file locale o da GitHub), esegue quei controlli con Soda su un DataFrame Spark che punta alla tabella, e scrive gli esiti in due tabelle Iceberg: un log granulare per esecuzione (`<dl_layer>_dqf_<dominio>_results`) e il dettaglio dei record scartati (`<dl_layer>_dqf_<dominio>_failed_records`). Se sono configurate le credenziali Soda Cloud, alla dashboard vengono inviate solo le metriche aggregate, mai i record.
 
 Risolve un problema concreto: tenere le regole di qualità insieme al contratto del dato, eseguirle in modo ripetibile su CDE (Cloudera Data Engineering) sotto orchestrazione Airflow, e lasciare a valle uno storico interrogabile — con il dettaglio delle righe che non passano i controlli — senza far uscire dati sensibili dal perimetro on-prem.
 
@@ -38,10 +38,10 @@ make run-dev
 Il target genera dati sintetici (`tests/mock_data_setup.py` legge il contratto per derivarne lo schema e scrive un DataFrame conforme), poi lancia la pipeline in ambiente `dev` sul contratto locale `tests/fixtures/contracts/payment_position.yaml`. È equivalente a:
 
 ```bash
-ENV=dev python -m dq_framework.entrypoints.run_quality --domain gpd --table-scope silver --watermark-from 1970-01-01
+ENV=dev python -m dq_framework.entrypoints.run_quality --domain gpd --dl-layer silver --watermark-from 1970-01-01
 ```
 
-`--domain` e `--table-scope` sono obbligatori e insieme compongono il nome delle tabelle di output (qui `silver_dqf_gpd_results` e `silver_dqf_gpd_failed_records`); `--watermark-from 1970-01-01` fa partire i controlli incrementali dall'epoch. In `dev` la scrittura su DB è disattivata (`results_write_enabled=False`): gli esiti vengono solo loggati, con il riepilogo dei check a fine run. Per provare invece il download del contratto da GitHub c'è `make run-dev-github`.
+`--domain` e `--dl-layer` sono obbligatori e insieme compongono il nome delle tabelle di output (qui `silver_dqf_gpd_results` e `silver_dqf_gpd_failed_records`); `--watermark-from 1970-01-01` fa partire i controlli incrementali dall'epoch. In `dev` la scrittura su DB è disattivata (`results_write_enabled=False`): gli esiti vengono solo loggati, con il riepilogo dei check a fine run. Per provare invece il download del contratto da GitHub c'è `make run-dev-github`.
 
 Lint (come in CI) e test:
 
@@ -57,7 +57,7 @@ Su CDE la forma di invocazione è quella di produzione — `launcher.py` come ap
 ```bash
 spark-submit launcher.py \
   --domain gpd \
-  --table-scope silver \
+  --dl-layer silver \
   --contract-path src/data/pagopa/gpd/silver/dc-gpd-payment_option.yaml \
   --repository owner/repo --ref main
 ```
@@ -78,7 +78,7 @@ L'entrypoint chiama `run_pipeline`, un orchestratore sottile: coordina i moduli 
 
 5. **Elaborazione degli esiti** — ogni check diventa una riga conforme allo schema dei risultati; il `check_name` è parsato secondo la naming convention (`fld__cmp__id__not_null` → categoria `field-level`, dimensione `completeness`, colonna `id`). Le colonne watermark si valorizzano solo per i check incrementali.
 
-6. **Scrittura** — gli esiti vanno in due tabelle Iceberg: `<table_scope>_dqf_<dominio>_results` (log granulare, una riga per check per run) e `<table_scope>_dqf_<dominio>_failed_records` (dettaglio dei record scartati, ricostruito ri-eseguendo le failed-query differite con la primary key passata da `--primary-keys`). In `dev` la scrittura è disattivata e resta tutto a log.
+6. **Scrittura** — gli esiti vanno in due tabelle Iceberg: `<dl_layer>_dqf_<dominio>_results` (log granulare, una riga per check per run) e `<dl_layer>_dqf_<dominio>_failed_records` (dettaglio dei record scartati, ricostruito ri-eseguendo le failed-query differite con la primary key passata da `--primary-keys`). In `dev` la scrittura è disattivata e resta tutto a log.
 
 Il punto che lega il tutto: la tabella `results` è insieme output e memoria. Il passo 2 rilegge da lì il watermark dei run precedenti filtrando per esito; con la policy di default (`pass_only`) il watermark avanza solo sui run riusciti, quindi una finestra che fallisce viene riprocessata finché il check non torna verde.
 
@@ -96,7 +96,7 @@ Tre livelli si sovrappongono, dal più stabile al più puntuale.
 
 `table_limit=0` lascia le view lazy così Iceberg può fare partition pruning/pushdown sui check incrementali; il 50 di `dev` materializza in cache una slice ridotta per velocità. `results_write_enabled=False` fa sì che in locale gli esiti restino solo a log. Gli altri campi dell'`AppConfig` governano la colonna watermark di default (`dl_event_tms`), la policy di avanzamento (`pass_only`/`executed`), il lookback per i late arrival, il numero di record falliti campionati per check e le primary key surrogate.
 
-**Override da CLI (per singolo run).** Gli argomenti di `run_quality` hanno priorità sui default dell'ambiente: `--domain` e `--table-scope` (obbligatori, insieme decidono il nome delle tabelle di output — `<table_scope>_dqf_<dominio>_results` — e sono validati come identificatori SQL semplici perché finiscono interpolati nella FQN), `--contract-path`/`--repository`/`--ref`, `--watermark-column` e `--watermark-from` (che bypassa il lookup automatico), `--primary-keys`, `--xref-datasets`, e `--dag-id`/`--airflow-run-id` (che di default leggono le variabili d'ambiente di Airflow).
+**Override da CLI (per singolo run).** Gli argomenti di `run_quality` hanno priorità sui default dell'ambiente: `--domain` e `--dl-layer` (obbligatori, insieme decidono il nome delle tabelle di output — `<dl_layer>_dqf_<dominio>_results` — e sono validati come identificatori SQL semplici perché finiscono interpolati nella FQN), `--contract-path`/`--repository`/`--ref`, `--watermark-column` e `--watermark-from` (che bypassa il lookup automatico), `--primary-keys`, `--xref-datasets`, e `--dag-id`/`--airflow-run-id` (che di default leggono le variabili d'ambiente di Airflow).
 
 **Segreti.** Pattern *file-then-env* (`common/secrets.py`): prima il file montato da CDE sotto `/etc/dex/secrets/<cred>/<key>`, poi la variabile d'ambiente (dal `.env` in locale). Vale per `GITHUB_TOKEN`, `SODA_API_KEY` e `SODA_API_SECRET`.
 
@@ -112,7 +112,7 @@ Le tabelle silver sono flussi CDC di grandi dimensioni (il contratto di esempio 
 
 ### Due tabelle Iceberg con ruoli distinti
 
-Gli esiti sono separati in due tabelle con scopi diversi: `<table_scope>_dqf_<dominio>_results` è il log granulare (una riga per check per esecuzione, con valore misurato, soglie, conteggi ed esito) e alimenta report e analisi storiche; `<table_scope>_dqf_<dominio>_failed_records` contiene il dettaglio operativo delle righe che hanno violato un controllo (chiave primaria + valore incriminato), per andare a vedere *quali* record sono sbagliati. La separazione non è solo ordine: come descritto sopra, la tabella dei risultati fa doppio servizio ed è anche lo store da cui i run incrementali rileggono il proprio watermark, cosa che ha senso tenere distinta dal dettaglio ad alto volume dei record scartati.
+Gli esiti sono separati in due tabelle con scopi diversi: `<dl_layer>_dqf_<dominio>_results` è il log granulare (una riga per check per esecuzione, con valore misurato, soglie, conteggi ed esito) e alimenta report e analisi storiche; `<dl_layer>_dqf_<dominio>_failed_records` contiene il dettaglio operativo delle righe che hanno violato un controllo (chiave primaria + valore incriminato), per andare a vedere *quali* record sono sbagliati. La separazione non è solo ordine: come descritto sopra, la tabella dei risultati fa doppio servizio ed è anche lo store da cui i run incrementali rileggono il proprio watermark, cosa che ha senso tenere distinta dal dettaglio ad alto volume dei record scartati.
 
 ### Il dettaglio delle righe fallite resta on-prem
 

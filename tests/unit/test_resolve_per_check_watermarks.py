@@ -22,7 +22,7 @@ from dq_framework.common.config.base import AppConfig
 from dq_framework.quality.utils import incremental
 
 DOMAIN = "gpd"
-SCOPE = "silver"
+DL_LAYER = "silver"
 
 
 # ---------------------------------------------------------------------------
@@ -122,7 +122,7 @@ def test_sostituisce_solo_check_con_placeholder():
             watermark_column="dl_event_tms",
             cli_override=None,
             domain=DOMAIN,
-            table_scope=SCOPE,
+            dl_layer=DL_LAYER,
         )
 
     spec = yaml.safe_load(new_sodacl)
@@ -165,7 +165,7 @@ def test_ogni_check_riceve_il_suo_specifico_watermark():
             watermark_column="dl_event_tms",
             cli_override=None,
             domain=DOMAIN,
-            table_scope=SCOPE,
+            dl_layer=DL_LAYER,
         )
 
     assert per_check_wm["check_a_incrementale"] == wm_a
@@ -193,7 +193,7 @@ def test_bootstrap_quando_lookup_torna_none():
             watermark_column="dl_event_tms",
             cli_override=None,
             domain=DOMAIN,
-            table_scope=SCOPE,
+            dl_layer=DL_LAYER,
         )
 
     assert per_check_wm["check_a_incrementale"] == datetime(1970, 1, 1)
@@ -214,7 +214,7 @@ def test_cli_override_forza_wm_from_per_tutti_i_check_incrementali():
             watermark_column="dl_event_tms",
             cli_override=cli_override,
             domain=DOMAIN,
-            table_scope=SCOPE,
+            dl_layer=DL_LAYER,
         )
 
     # Con CLI override il lookup NON dovrebbe essere mai chiamato
@@ -237,7 +237,7 @@ def test_lookback_minutes_sottrae_dal_valore_dell_lookup():
             watermark_column="dl_event_tms",
             cli_override=None,
             domain=DOMAIN,
-            table_scope=SCOPE,
+            dl_layer=DL_LAYER,
         )
 
     # 30 minuti di lookback applicati al valore dell'Iceberg lookup
@@ -261,7 +261,7 @@ def test_errore_se_wm_from_maggiore_uguale_wm_to():
                 watermark_column="dl_event_tms",
                 cli_override=None,
                 domain=DOMAIN,
-                table_scope=SCOPE,
+                dl_layer=DL_LAYER,
             )
 
 
@@ -285,7 +285,7 @@ def test_contract_senza_placeholder_non_chiama_il_lookup_e_non_popola_dict():
             watermark_column="dl_event_tms",
             cli_override=None,
             domain=DOMAIN,
-            table_scope=SCOPE,
+            dl_layer=DL_LAYER,
         )
 
     m.assert_not_called()
@@ -319,7 +319,7 @@ def test_sostituisce_placeholder_dentro_filter_dei_check_nativi():
             watermark_column="dl_event_tms",
             cli_override=None,
             domain=DOMAIN,
-            table_scope=SCOPE,
+            dl_layer=DL_LAYER,
         )
 
     spec   = yaml.safe_load(new_sodacl)
@@ -383,7 +383,7 @@ def test_sostituzione_aliased_produce_colonna_qualificata():
             watermark_column="dl_event_tms",
             cli_override=None,
             domain=DOMAIN,
-            table_scope=SCOPE,
+            dl_layer=DL_LAYER,
         )
 
     spec  = yaml.safe_load(new_sodacl)
@@ -423,7 +423,7 @@ def test_due_check_con_alias_diversi_ricevono_prefissi_distinti():
             watermark_column="dl_event_tms",
             cli_override=None,
             domain=DOMAIN,
-            table_scope=SCOPE,
+            dl_layer=DL_LAYER,
         )
 
     spec    = yaml.safe_load(new_sodacl)
@@ -463,7 +463,7 @@ def test_mixed_bare_e_aliased_nello_stesso_campo():
             watermark_column="dl_event_tms",
             cli_override=None,
             domain=DOMAIN,
-            table_scope=SCOPE,
+            dl_layer=DL_LAYER,
         )
 
     query = yaml.safe_load(new_sodacl)["checks for silver_t"][0]["failed rows"]["fail query"]
@@ -493,7 +493,7 @@ def test_filter_nativo_aliased_preserva_la_condizione_business():
             watermark_column="dl_event_tms",
             cli_override=None,
             domain=DOMAIN,
-            table_scope=SCOPE,
+            dl_layer=DL_LAYER,
         )
 
     flt = yaml.safe_load(new_sodacl)["checks for silver_t"][0][
@@ -520,7 +520,7 @@ def test_contract_solo_aliased_e_rilevato_come_incrementale():
             watermark_column="dl_event_tms",
             cli_override=None,
             domain=DOMAIN,
-            table_scope=SCOPE,
+            dl_layer=DL_LAYER,
         )
 
     assert "xref__cns__ref_integrity" in per_check_wm
@@ -550,7 +550,7 @@ def test_alias_malformato_non_matcha_e_resta_nel_sodacl():
             watermark_column="dl_event_tms",
             cli_override=None,
             domain=DOMAIN,
-            table_scope=SCOPE,
+            dl_layer=DL_LAYER,
         )
 
     m.assert_not_called()
@@ -593,7 +593,7 @@ def test_policy_executed_passa_outcomes_estesi_al_lookup():
             watermark_column="dl_event_tms",
             cli_override=None,
             domain=DOMAIN,
-            table_scope=SCOPE,
+            dl_layer=DL_LAYER,
         )
 
     # advance_outcomes e' l'ultimo argomento posizionale del lookup
@@ -617,7 +617,7 @@ def test_policy_default_passa_solo_pass_al_lookup():
             watermark_column="dl_event_tms",
             cli_override=None,
             domain=DOMAIN,
-            table_scope=SCOPE,
+            dl_layer=DL_LAYER,
         )
 
     for call in m.call_args_list:
@@ -639,7 +639,7 @@ def test_policy_ignota_fa_fail_fast():
                 watermark_column="dl_event_tms",
                 cli_override=None,
                 domain=DOMAIN,
-                table_scope=SCOPE,
+                dl_layer=DL_LAYER,
             )
 
     m.assert_not_called()

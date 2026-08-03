@@ -4,20 +4,20 @@ Entrypoint CDE per il job di Data Quality.
 Invocazione tipica su CDE:
     spark-submit launcher.py \
       --domain gpd \
-      --table-scope silver \
+      --dl-layer silver \
       --contract-path src/data/pagopa/gpd/silver/dc-gpd-payment_option.yaml \
       --repository carlomanco-qty/qty-data-contracts \
       --ref main
 
---domain e --table-scope sono obbligatori: insieme compongono i nomi delle
-tabelle di output ({table_scope}_dqf_{domain}_results e
-{table_scope}_dqf_{domain}_failed_records). Ognuno degli altri tre argomenti è
+--domain e --dl-layer sono obbligatori: insieme compongono i nomi delle
+tabelle di output ({dl_layer}_dqf_{domain}_results e
+{dl_layer}_dqf_{domain}_failed_records). Ognuno degli altri tre argomenti è
 opzionale: se omesso viene usato il valore di default definito in AppConfig per
 l'ambiente corrente (ENV).
 
 Invocazione da Airflow DAG:
     spark-submit dq_framework.whl --entrypoint run_quality \
-      --domain gpd --table-scope silver \
+      --domain gpd --dl-layer silver \
       --contract-path /path/to/contracts/gpd/silver_table.yaml
       --repository carlomanco-qty/qty-data-contracts \
       --ref main
@@ -40,11 +40,11 @@ _SQL_IDENTIFIER_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 def _parse_sql_identifier(value: str) -> str:
-    """Parser argparse per --domain e --table-scope.
+    """Parser argparse per --domain e --dl-layer.
 
     Normalizza (strip + lower) e valida che il valore sia un identificatore SQL
     semplice. Serve perche' i due parametri finiscono interpolati sia nel nome
-    della tabella ({table_scope}_dqf_{domain}_results) sia nella clausola
+    della tabella ({dl_layer}_dqf_{domain}_results) sia nella clausola
     LOCATION: un valore con un punto produrrebbe un FQN a tre parti, che Spark
     interpreta come catalog.database.table e che quindi scriverebbe su un
     database diverso senza alcun errore; spazi o maiuscole creerebbero una
@@ -109,15 +109,15 @@ def _parse_args(
     )
 
     parser.add_argument(
-        "--table-scope",
+        "--dl-layer",
         required=True,
         type=_parse_sql_identifier,
         help=(
-            "Scope delle tabelle di output, tipicamente il layer del Data Lake "
-            "(es. silver, gold). Prefissa entrambe le tabelle: "
-            "'{table_scope}_dqf_{domain}_results' e "
-            "'{table_scope}_dqf_{domain}_failed_records'. Lo stesso prefisso e' "
-            "usato dal lookup del watermark incrementale, quindi due scope "
+            "Layer del Data Lake su cui scrivere gli esiti (es. silver, gold). "
+            "Prefissa entrambe le tabelle di output: "
+            "'{dl_layer}_dqf_{domain}_results' e "
+            "'{dl_layer}_dqf_{domain}_failed_records'. Lo stesso prefisso e' "
+            "usato dal lookup del watermark incrementale, quindi due layer "
             "distinti hanno storici e watermark indipendenti."
         ),
     )
@@ -220,7 +220,7 @@ def main(argv: list[str] | None = None) -> None:
         ref                       = args.ref,
         config                    = config,
         domain                    = args.domain,
-        table_scope               = args.table_scope,
+        dl_layer                  = args.dl_layer,
         dag_id                    = args.dag_id,
         airflow_run_id            = args.airflow_run_id,
         watermark_column_override = args.watermark_column,
