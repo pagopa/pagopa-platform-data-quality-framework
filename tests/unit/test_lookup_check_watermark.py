@@ -90,7 +90,7 @@ def test_eccezione_sulla_query_propaga_runtime_error():
 
 
 def test_query_forma_base_filtra_dataset_check_e_watermark_not_null():
-    """La query SQL deve filtrare la FQN per scope e dominio, check_name, dataset e
+    """La query SQL deve filtrare la FQN per layer e dominio, check_name, dataset e
     watermark_to IS NOT NULL."""
     cfg = _make_config()
     spark = _spark_returning(datetime(2026, 5, 26, 0, 0, 0))
