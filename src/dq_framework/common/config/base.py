@@ -44,7 +44,7 @@ class AppConfig:
     #       (outcome in pass/warn/fail), dunque anche in warn/fail. Solo un check
     #       che non viene eseguito (errore, nessun esito valido) non fa avanzare il
     #       watermark.
-    incremental_watermark_advance_policy: str = "pass_only"
+    incremental_watermark_advance_policy: str = "executed"
 
     #   Numero massimo di record falliti campionati per check e scritti nella
     #   tabella failed_records. Vale per entrambi i path di cattura: i sample dei
