@@ -5,3 +5,4 @@
 #     line 45: set: pipefail: invalid option name
 *.sh      text eol=lf
 Makefile  text eol=lf
+* text=auto eol=lf

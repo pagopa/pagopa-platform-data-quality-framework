@@ -15,6 +15,7 @@ from typing import Optional
 
 import yaml
 from pyspark.sql import SparkSession
+from pyspark.sql.utils import AnalysisException
 
 from dq_framework.common.config import AppConfig
 
@@ -77,11 +78,14 @@ def _lookup_check_watermark(
     su cui scrive `result_writer`: due `dl_layer` distinti (es. silver e gold)
     hanno quindi storici e watermark completamente indipendenti.
 
-    Se la query gira ma non trova righe utili ritorna None e il chiamante applica
-    il bootstrap all'epoch. Se invece la query stessa fallisce (tabella assente,
-    permessi, schema incompatibile) NON c'e' fallback: solleva RuntimeError, cosi'
-    un rename/una tabella mancante non si traduce in un silenzioso riprocessamento
-    integrale. In quel caso l'operatore deve passare --watermark-from.
+    Se la query gira ma non trova righe utili (tabella presente ma senza storico
+    per quel check, oppure tabella non ancora creata al primo run su questo
+    dominio/layer) ritorna None e il chiamante applica il bootstrap esplicito
+    (`--watermark-bootstrap-from`, obbligatorio quando il contract usa il
+    placeholder incrementale). Se invece la query fallisce per un motivo diverso
+    dalla tabella assente (permessi, schema incompatibile, catalogo
+    irraggiungibile) NON c'e' fallback: solleva RuntimeError, cosi' un errore
+    reale non si traduce in un silenzioso riprocessamento integrale.
     """
     outcome_in = ", ".join(f"'{o}'" for o in advance_outcomes)
     fqn = f"{config.results_database}.{dl_layer}_dqf_{domain}_results"
@@ -97,10 +101,23 @@ def _lookup_check_watermark(
             """
         ).collect()
         return row[0]["wm"] if row and row[0]["wm"] else None
+    except AnalysisException as e:
+        if "TABLE_OR_VIEW_NOT_FOUND" in str(e) or "Table or view not found" in str(e):
+            logger.warning(
+                f"Tabella {fqn} non ancora esistente (primo run su questo "
+                f"dominio/layer): bootstrap per check '{check_name}'."
+            )
+            return None
+        logger.error(f"Errore critico durante il lookup del watermark su {fqn}: {e}")
+        raise RuntimeError(
+            f"Impossibile leggere dalla tabella {fqn}: {e}. "
+            f"Verificare permessi/schema, oppure passare --watermark-from."
+        ) from e
     except Exception as e:
         logger.error(f"Errore critico durante il lookup del watermark su {fqn}: {e}")
         raise RuntimeError(
-            f"Impossibile leggere dalla tabella {fqn} e parametro --watermark-from mancante"
+            f"Impossibile leggere dalla tabella {fqn}: {e}. "
+            f"Verificare permessi/schema, oppure passare --watermark-from."
         ) from e
 
 
@@ -181,13 +198,25 @@ def _resolve_per_check_watermarks(
     cli_override: Optional[datetime],
     domain: str,
     dl_layer: str,
+    bootstrap_from: Optional[datetime] = None,
 ) -> tuple[str, dict[str, datetime]]:
     """Walk del SodaCL con sostituzione per-check del placeholder.
 
     Ritorna `(sodacl_yaml, per_check_wm)`: il secondo mappa `check_name -> wm_from`
-    solo per i check incrementali (i massivi non compaiono). Risoluzione di wm_from:
-    CLI override → lookup Iceberg (outcome filtrati per policy) con lookback →
-    bootstrap a epoch.
+    solo per i check incrementali (i massivi non compaiono). Risoluzione di wm_from,
+    in ordine di priorità:
+      1. `cli_override` (--watermark-from): vince su tutto, stesso valore per
+         TUTTI i check incrementali del run, nessuna query al DB.
+      2. lookup Iceberg per-check (outcome filtrati per policy, con lookback):
+         se il check ha storico valido, si usa quello.
+      3. `bootstrap_from` (--watermark-bootstrap-from): SOLO se il lookup non
+         produce nulla di utilizzabile per quel check (tabella non ancora
+         esistente, oppure esistente ma senza storico per quel check).
+    Né `cli_override` né `bootstrap_from` sono obbligatori: se il lookup trova
+    sempre un valore per ogni check, nessuno dei due serve. `bootstrap_from`
+    diventa necessario solo quando si arriva effettivamente al punto 3 per
+    qualche check: se manca in quel momento, si solleva ValueError (per quel
+    check specifico, non a priori per l'intero run).
     Solleva ValueError se per qualche check `wm_from >= scan_ts`.
 
     NB invariante naive-UTC: `scan_ts` e i watermark letti da Iceberg sono naive;
@@ -243,11 +272,17 @@ def _resolve_per_check_watermarks(
                         )
                         source = "iceberg"
                     else:
-                        wm_from = datetime(1970, 1, 1)
+                        if bootstrap_from is None:
+                            raise ValueError(
+                                f"Check '{check_name}': nessuno storico trovato "
+                                f"(tabella assente o senza righe per questo check) "
+                                f"e nessun --watermark-bootstrap-from fornito. "
+                            )
+                        wm_from = bootstrap_from
                         source = "bootstrap"
                         logger.warning(
                             f"Bootstrap watermark per check '{check_name}': "
-                            f"nessuna run 'pass' precedente trovata."
+                            f"nessuno storico trovato, uso bootstrap_from={wm_from.isoformat()}."
                         )
 
                 if wm_from >= scan_ts:
@@ -299,6 +334,7 @@ def apply_incremental_conditions(
     watermark_from_override: Optional[datetime],
     domain: str,
     dl_layer: str,
+    watermark_bootstrap_from: Optional[datetime] = None,
 ) -> tuple[str, dict[str, datetime], Optional[str]]:
     """Entry pubblico: se il SodaCL contiene il placeholder, risolve i watermark
     per-check e lo sostituisce; altrimenti è un no-op.
@@ -306,6 +342,11 @@ def apply_incremental_conditions(
     Ritorna `(sodacl, per_check_wm, effective_watermark_column)`. Senza placeholder
     ritorna `(contract['sodacl'], {}, None)`. Solleva ValueError se il placeholder
     è presente ma nessuna colonna watermark è risolvibile.
+
+    Né `watermark_from_override` né `watermark_bootstrap_from` sono richiesti qui:
+    sono entrambi opzionali, usati solo se e quando il lookup per-check lo
+    richiede (vedi `_resolve_per_check_watermarks`). Un run i cui check hanno
+    tutti storico su Iceberg funziona senza passare nessuno dei due.
     """
     if not _INCREMENTAL_RE.search(contract["sodacl"]):
         return contract["sodacl"], {}, None
@@ -319,9 +360,12 @@ def apply_incremental_conditions(
             f"AppConfig.default_watermark_column non configurata)."
         )
 
+    bootstrap_log = (
+        watermark_bootstrap_from.isoformat() if watermark_bootstrap_from else "non fornito"
+    )
     logger.info(
         f"Controlli incrementali rilevati. watermark_column={effective_watermark_column} "
-        f"scan_ts(wm_to)={scan_ts.isoformat()}"
+        f"scan_ts(wm_to)={scan_ts.isoformat()} bootstrap_from={bootstrap_log}"
     )
     new_sodacl, per_check_wm = _resolve_per_check_watermarks(
         spark            = spark,
@@ -332,5 +376,6 @@ def apply_incremental_conditions(
         cli_override     = watermark_from_override,
         domain           = domain,
         dl_layer         = dl_layer,
+        bootstrap_from   = watermark_bootstrap_from,
     )
     return new_sodacl, per_check_wm, effective_watermark_column

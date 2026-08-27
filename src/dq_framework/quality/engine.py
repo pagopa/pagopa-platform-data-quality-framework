@@ -14,6 +14,7 @@ from dq_framework.common.config import AppConfig
 # monkeypatch dei test (monkeypatch.setattr(engine, ...)) si agganciano al
 # punto di chiamata effettivo.
 from .contract_parser import parse_contract_file, extract_and_clean_failed_queries
+from .errors import ContractValidationError, ScanExecutionError
 from .utils.incremental import apply_incremental_conditions
 from .soda_executor import run_dataframe_soda_scan
 from .result_writer import (
@@ -49,6 +50,7 @@ def run_pipeline(
     airflow_run_id:            Optional[str]       = None,
     watermark_column_override: Optional[str]       = None,
     watermark_from_override:   Optional[datetime]  = None,
+    watermark_bootstrap_from:  Optional[datetime]  = None,
     primary_keys:              Optional[list[str]] = None,
     xref_datasets:             Optional[list[str]] = None,
 ) -> None:
@@ -57,10 +59,14 @@ def run_pipeline(
         f"Avvio pipeline Data Quality {domain.upper()} (dl_layer={dl_layer}) per: {source_desc}"
     )
 
+    # parse_contract_file solleva ContractError (fatale) se il contract non è
+    # leggibile o non contiene un blocco 'quality' SodaCL valido: l'eccezione
+    # risale all'entrypoint e fa fallire lo spark-submit.
     contract = parse_contract_file(contract_path, repository, ref, config, xref_datasets_override=xref_datasets)
     if not contract:
-        logger.error("Contract non valido o non trovato. Pipeline terminata.")
-        return
+        raise ContractValidationError(
+            f"Nessuna specifica di quality utilizzabile per {source_desc}."
+        )
 
     spark   = init_spark(app_name=f"{domain}_quality_{contract['table_name']}")
     run_id  = str(uuid.uuid4())
@@ -76,7 +82,7 @@ def run_pipeline(
     # Controlli incrementali: l'intero blocco watermark collassa in una chiamata.
     contract["sodacl"], per_check_wm, effective_watermark_column = apply_incremental_conditions(
         spark, config, contract, scan_ts, watermark_column_override, watermark_from_override,
-        domain, dl_layer,
+        domain, dl_layer, watermark_bootstrap_from,
     )
 
     # Estrazione delle failed-query DOPO la sostituzione watermark, così la query
@@ -104,7 +110,9 @@ def run_pipeline(
         ))
         log_contract_summary(soda_checks, contract["contract_title"])
     else:
-        logger.warning("Nessun check restituito dallo scan Soda.")
+        # run_dataframe_soda_scan solleva gia' su scan fallito o zero check:
+        # qui ci si arriva solo per un'incoerenza interna, che resta fatale.
+        raise ScanExecutionError("Nessun check restituito dallo scan Soda.")
 
     if result_rows:
         if extracted_queries:
@@ -131,7 +139,10 @@ def run_pipeline(
             spark, final_result_rows, sampler, config, effective_primary_keys, domain, dl_layer
         )
     else:
-        logger.warning("Nessun risultato elaborato.")
+        raise ScanExecutionError(
+            f"Nessun risultato elaborato per {contract['contract_title']}: "
+            f"{len(soda_checks)} check valutati ma nessuna riga da scrivere."
+        )
 
     logger.info("Pipeline completata. Chiusura sessione Spark.")
     spark.stop()

@@ -16,6 +16,7 @@ import yaml
 
 from dq_framework.common.config import AppConfig
 from dq_framework.common import secrets
+from .errors import ContractNotReadableError
 
 logger = logging.getLogger(__name__)
 
@@ -97,24 +98,33 @@ def read_contract_doc(
     repository: str,
     ref: str,
     config: AppConfig,
-) -> tuple[str, dict | None]:
+) -> tuple[str, dict]:
     """Risolve il path e legge lo YAML del Data Contract in un dict grezzo.
 
-    Ritorna `(filepath, doc)`; `doc` è None se path-resolution o lettura
-    falliscono (l'errore è loggato). Il `filepath` ritornato è il path locale
-    effettivo (per i contract remoti è il file temporaneo scaricato).
+    Ritorna `(filepath, doc)`, dove `filepath` è il path locale effettivo (per i
+    contract remoti è il file temporaneo scaricato).
+
     """
     try:
         filepath = _resolve_contract_path(contract_path, repository, ref, config)
     except RuntimeError as e:
-        logger.error(str(e))
-        return contract_path, None
+        raise ContractNotReadableError(
+            f"Data Contract non recuperabile ('{contract_path}'): {e}"
+        ) from e
 
     try:
         with open(filepath, "r", encoding="utf-8") as f:
             doc = yaml.safe_load(f)
-        logger.info(f"Lettura YAML da {filepath} riuscita con successo!")
-        return filepath, doc
     except Exception as e:
-        logger.error(f"Errore durante la lettura del file {filepath}: {e}")
-        return filepath, None
+        raise ContractNotReadableError(
+            f"Errore durante la lettura del file {filepath}: {e}"
+        ) from e
+
+    if not isinstance(doc, dict):
+        raise ContractNotReadableError(
+            f"Data Contract '{filepath}' non valido: attesa una mappa YAML, "
+            f"trovato {type(doc).__name__}."
+        )
+
+    logger.info(f"Lettura YAML da {filepath} riuscita con successo!")
+    return filepath, doc
