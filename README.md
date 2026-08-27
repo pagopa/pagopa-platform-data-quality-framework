@@ -4,7 +4,7 @@ Framework di Data Quality per la piattaforma PagoPa CDP: esegue sui dati del Dat
 
 ## Overview
 
-Un **Data Contract** è un file YAML che descrive una tabella silver e, nel blocco `quality`, ne porta con sé i controlli di qualità già scritti in **SodaCL**. Il framework legge il contratto (da file locale o da GitHub), esegue quei controlli con Soda su un DataFrame Spark che punta alla tabella, e scrive gli esiti in due tabelle Iceberg: un log granulare per esecuzione (`<dl_layer>_dqf_<dominio>_results`) e il dettaglio dei record scartati (`<dl_layer>_dqf_<dominio>_failed_records`). Se sono configurate le credenziali Soda Cloud, alla dashboard vengono inviate solo le metriche aggregate, mai i record.
+Un **Data Contract** è un file YAML che descrive una tabella e, nel blocco `quality`, ne porta con sé i controlli di qualità già scritti in **SodaCL**. Il framework legge il contratto (da file locale o da GitHub), esegue quei controlli con Soda su un DataFrame Spark che punta alla tabella, e scrive gli esiti in due tabelle Iceberg: un log granulare per esecuzione (`<dl_layer>_dqf_<data_product>_results`) e il dettaglio dei record scartati (`<dl_layer>_dqf_<data_product>_failed_records`). Se sono configurate le credenziali Soda Cloud, alla dashboard vengono inviate solo le metriche aggregate, mai i singoli record di sample.
 
 Risolve un problema concreto: tenere le regole di qualità insieme al contratto del dato, eseguirle in modo ripetibile su CDE (Cloudera Data Engineering) sotto orchestrazione Airflow, e lasciare a valle uno storico interrogabile — con il dettaglio delle righe che non passano i controlli — senza far uscire dati sensibili dal perimetro on-prem.
 
@@ -50,8 +50,6 @@ ruff check .
 pytest
 ```
 
-> Nota: il target `make lint` invoca ancora `flake8`, ma la CI usa `ruff check .` — per allinearti a ciò che verrà validato, linta con `ruff`.
-
 Su CDE la forma di invocazione è quella di produzione — `launcher.py` come application file e il wheel come dipendenza, con `ENV` iniettata nel driver/executor Spark:
 
 ```bash
@@ -68,7 +66,7 @@ Il deploy del wheel + launcher e la creazione/aggiornamento del job CDE sono aut
 
 L'entrypoint chiama `run_pipeline`, un orchestratore sottile: coordina i moduli in sequenza, mentre la logica vive nelle foglie. Passo per passo:
 
-1. **Lettura del contratto** — `contract_reader` fa solo I/O: risolve il path (locale se `--repository` è vuoto, altrimenti scarica il file via GitHub Contents API con decodifica base64). `contract_parser` fa solo trasformazione pura: estrae il `dataset`, deriva il `table_name` (la foglia del dataset, con `-` → `_`, perché diventa il nome di una temp view SQL) e prende il **SodaCL così com'è** dal blocco `quality.specification`, riallineando i nomi tabella alle temp view Spark.
+1. **Lettura del contratto** — `contract_reader` fa solo I/O: risolve il path (locale se `--repository` è vuoto, altrimenti scarica il file via GitHub Contents API con decodifica base64). `contract_parser` fa solo trasformazione pura: estrae il `dataset`, deriva il `table_name` e prende il **SodaCL così com'è** dal blocco `quality.specification`, riallineando i nomi tabella alle temp view Spark.
 
 2. **Risoluzione del watermark** — se il SodaCL contiene `${INCREMENTAL_CONDITIONS}`, per ogni check il placeholder viene sostituito con la finestra `colonna > wm_from AND colonna <= wm_to`. Il `wm_from` si risolve in cascata: override da CLI → ultimo watermark letto dalla tabella dei risultati → bootstrap all'epoch. Senza placeholder è un no-op.
 
@@ -96,7 +94,7 @@ Tre livelli si sovrappongono, dal più stabile al più puntuale.
 
 `table_limit=0` lascia le view lazy così Iceberg può fare partition pruning/pushdown sui check incrementali; il 50 di `dev` materializza in cache una slice ridotta per velocità. `results_write_enabled=False` fa sì che in locale gli esiti restino solo a log. Gli altri campi dell'`AppConfig` governano la colonna watermark di default (`dl_event_tms`), la policy di avanzamento (`pass_only`/`executed`), il lookback per i late arrival, il numero di record falliti campionati per check e le primary key surrogate.
 
-**Override da CLI (per singolo run).** Gli argomenti di `run_quality` hanno priorità sui default dell'ambiente: `--domain` e `--dl-layer` (obbligatori, insieme decidono il nome delle tabelle di output — `<dl_layer>_dqf_<dominio>_results` — e sono validati come identificatori SQL semplici perché finiscono interpolati nella FQN), `--contract-path`/`--repository`/`--ref`, `--watermark-column` e `--watermark-from` (che bypassa il lookup automatico), `--primary-keys`, `--xref-datasets`, e `--dag-id`/`--airflow-run-id` (che di default leggono le variabili d'ambiente di Airflow).
+**Override da CLI (per singolo run).** Gli argomenti di `run_quality` hanno priorità sui default dell'ambiente: `--domain` e `--dl-layer` (obbligatori, insieme decidono il nome delle tabelle di output — `<dl_layer>_dqf_<data_product>_results` — e sono validati come identificatori SQL semplici perché finiscono interpolati nella FQN), `--contract-path`/`--repository`/`--ref`, `--watermark-column` e `--watermark-from` (che bypassa il lookup automatico), `--primary-keys`, `--xref-datasets`, e `--dag-id`/`--airflow-run-id` (che di default leggono le variabili d'ambiente di Airflow).
 
 **Segreti.** Pattern *file-then-env* (`common/secrets.py`): prima il file montato da CDE sotto `/etc/dex/secrets/<cred>/<key>`, poi la variabile d'ambiente (dal `.env` in locale). Vale per `GITHUB_TOKEN`, `SODA_API_KEY` e `SODA_API_SECRET`.
 
