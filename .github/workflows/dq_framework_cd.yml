@@ -1,21 +1,29 @@
 name: CD — Deploy su CDE
 
+# Deploy solo manuale: nessun trigger automatico su push. L'ambiente lo decide il
+# branch da cui si lancia il dispatch — main → prod, ogni altro branch → -test.
 on:
-  push:
-    branches-ignore: [main]
   workflow_dispatch:
     inputs:
       confirm:
-        description: 'Scrivi "yes" per confermare il deploy'
+        description: 'Confermi il deploy su CDE?'
+        type: choice
         required: true
-        default: ''
+        # Le opzioni sono quotate di proposito: in YAML yes/no non quotati
+        # diventerebbero booleani, e il confronto in `if` cerca la stringa.
+        default: 'no'
+        options:
+          - 'no'
+          - 'yes'
 
 jobs:
   deploy:
-    if: >-
-      github.event_name == 'push' ||
-      (github.event_name == 'workflow_dispatch' && inputs.confirm == 'yes')
-    runs-on: ubuntu-latest
+    if: inputs.confirm == 'yes'
+    # Runner self-hosted CodeBuild (progetto pagopa-platform-data-quality-framework-runner,
+    # account 407424444552, eu-south-1). run_id e run_attempt nel label sono obbligatori:
+    # è così che CodeBuild lega il runner effimero alla singola esecuzione del job.
+    runs-on:
+      - codebuild-pagopa-platform-data-quality-framework-runner-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - uses: actions/checkout@v4
@@ -46,7 +54,9 @@ jobs:
             echo "CDE CLI non trovato, scarico da ${{ vars.CDE_CLI_DOWNLOAD_URL }}"
             curl -L --max-time 30 -o cde "${{ vars.CDE_CLI_DOWNLOAD_URL }}"
             chmod +x cde
-            sudo mv cde /usr/local/bin/cde
+            # Il container CodeBuild gira come root: sudo è superfluo e non è
+            # garantito nell'immagine amazonlinux-x86_64-standard.
+            mv cde /usr/local/bin/cde
             echo "CDE CLI installato: $(cde --version)"
           fi
 

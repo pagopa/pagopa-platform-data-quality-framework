@@ -7,7 +7,11 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Runner self-hosted CodeBuild (progetto pagopa-platform-data-quality-framework-runner,
+    # account 407424444552, eu-south-1). run_id e run_attempt nel label sono obbligatori:
+    # è così che CodeBuild lega il runner effimero alla singola esecuzione del job.
+    runs-on:
+      - codebuild-pagopa-platform-data-quality-framework-runner-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - uses: actions/checkout@v4
