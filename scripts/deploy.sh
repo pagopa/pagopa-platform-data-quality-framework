@@ -99,12 +99,6 @@ JOB_ARGS=(
     --arg "--contract-path=src/data/pagopa/gpd/silver/transfer.yaml"
     --arg "--repository=carlomanco-qty/qty-data-contracts"
     --arg "--ref=main"
-    # BOOTSTRAP: forza wm_from su TUTTI i check incrementali bypassando il lookup
-    # su Iceberg. Serve solo al primo run di un ambiente, dove la tabella results
-    # non esiste ancora e il lookup farebbe fail-fast. RIMUOVERE dopo il primo run
-    # verde: se resta, ogni run riparte dal 2026-07-01 e la finestra incrementale
-    # cresce senza limite invece di avanzare.
-    --arg "--watermark-from=2026-07-01T13:00:00"
 )
 
 # ----- Sanity check tooling ---------------------------------------------------
@@ -130,7 +124,10 @@ echo "================================================================="
 # ----- Build wheel ------------------------------------------------------------
 echo ""
 echo "[1/4] Build wheel..."
-rm -rf dist/ build/ *.egg-info
+# src/*.egg-info: il layout e' src-based, la egg-info nasce sotto src/ e non
+# nella root — un glob solo su *.egg-info la lascerebbe indietro e setuptools
+# fallirebbe con "Cannot update time stamp of directory".
+rm -rf dist/ build/ *.egg-info src/*.egg-info
 python3 -m build --wheel
 
 WHL=$(ls dist/*.whl | head -n1)

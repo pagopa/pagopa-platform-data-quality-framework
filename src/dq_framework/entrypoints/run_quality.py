@@ -34,6 +34,7 @@ from datetime import datetime
 from dq_framework.common.config import load_config
 from dq_framework.common.logging import setup_logging
 from dq_framework.quality.engine import run_pipeline
+from dq_framework.quality.errors import DQFrameworkError
 import logging
 
 _SQL_IDENTIFIER_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -186,6 +187,21 @@ def _parse_args(
         ),
     )
     parser.add_argument(
+        "--watermark-bootstrap-from",
+        type=_parse_iso_datetime,
+        default=None,
+        help=(
+            "Data di bootstrap in formato ISO 8601, opzionale. Entra in gioco "
+            "SOLO quando un check incrementale non ha alcuno storico (tabella "
+            "results non ancora esistente, o esistente ma senza righe per quel "
+            "check): in quel caso, se questo parametro manca, il job fallisce "
+            "per quel check. Se ogni check ha gia' storico su Iceberg, questo "
+            "flag e' del tutto ininfluente. Diversa da --watermark-from: quella "
+            "forza TUTTI i check ad ogni run bypassando il DB, questa si "
+            "applica solo dove il DB non ha nulla da restituire."
+        ),
+    )
+    parser.add_argument(
         "--primary-keys",
         type=_parse_primary_keys,
         default=None,
@@ -214,6 +230,16 @@ def main(argv: list[str] | None = None) -> None:
         argv=argv,
     )
 
+    try:
+        _run(args, config)
+    except DQFrameworkError as exc:
+        # Errore atteso e fatale (es. blocco 'quality' assente nel contract):
+        # log conciso senza traceback, exit code 1 -> il job risulta FAILED su CDE.
+        logging.getLogger(__name__).error(f"Job di Data Quality fallito: {exc}")
+        sys.exit(1)
+
+
+def _run(args: argparse.Namespace, config) -> None:
     run_pipeline(
         contract_path             = args.contract_path,
         repository                = args.repository,
@@ -225,6 +251,7 @@ def main(argv: list[str] | None = None) -> None:
         airflow_run_id            = args.airflow_run_id,
         watermark_column_override = args.watermark_column,
         watermark_from_override   = args.watermark_from,
+        watermark_bootstrap_from  = args.watermark_bootstrap_from,
         primary_keys              = args.primary_keys,
         xref_datasets             = args.xref_datasets,
     )

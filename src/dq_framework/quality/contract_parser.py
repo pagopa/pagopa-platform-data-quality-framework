@@ -15,6 +15,7 @@ import yaml
 
 from dq_framework.common.config import AppConfig
 from .contract_reader import read_contract_doc
+from .errors import ContractError, ContractValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -114,21 +115,33 @@ def parse_contract_file(
     ref: str,
     config: AppConfig,
     xref_datasets_override: list[str] | None = None,
-) -> dict | None:
-    """Legge il Data Contract ed estrae la specifica SodaCL dal blocco 'quality'."""
+) -> dict:
+    """Legge il Data Contract ed estrae la specifica SodaCL dal blocco 'quality'.
+
+    Solleva `ContractValidationError` se il blocco 'quality' è assente, non è di
+    tipo 'SodaCL' o è incompleto ('dataset'/'specification' mancanti), e
+    `ContractNotReadableError` se il file non è leggibile. Sono errori fatali:
+    il job deve fallire, perché un contract senza quality non produce alcun
+    controllo e un run "verde" senza check sarebbe indistinguibile da un run ok.
+    """
     filepath, doc = read_contract_doc(contract_path, repository, ref, config)
-    if doc is None:
-        return None
 
     try:
         info = doc.get("info", {})
         contract_title = info.get("title", os.path.basename(filepath))
         contract_version = str(info.get("version", "1.0"))
 
-        quality_block = doc.get("quality", {})
-        if not quality_block or quality_block.get("type") != "SodaCL":
-            logger.error(f"File saltato '{filepath}': manca il blocco 'quality' di tipo 'SodaCL'.")
-            return None
+        quality_block = doc.get("quality")
+        if not quality_block or not isinstance(quality_block, dict):
+            raise ContractValidationError(
+                f"Data Contract '{filepath}' non valido: blocco 'quality' assente o vuoto. "
+                f"Nessun controllo di qualità eseguibile."
+            )
+        if quality_block.get("type") != "SodaCL":
+            raise ContractValidationError(
+                f"Data Contract '{filepath}' non valido: blocco 'quality' di tipo "
+                f"{quality_block.get('type')!r}, atteso 'SodaCL'."
+            )
 
         dataset = quality_block.get("dataset", "")
         raw_sodacl = quality_block.get("specification", "")
@@ -143,8 +156,10 @@ def parse_contract_file(
             xref_datasets = xref_datasets_override
 
         if not dataset or not raw_sodacl:
-            logger.error(f"File saltato '{filepath}': 'dataset' o 'specification' mancanti nel blocco 'quality'.")
-            return None
+            missing = ", ".join(k for k, v in (("dataset", dataset), ("specification", raw_sodacl)) if not v)
+            raise ContractValidationError(
+                f"Data Contract '{filepath}' non valido: {missing} mancante/vuoto nel blocco 'quality'."
+            )
 
         # table_name = leaf del dataset con '-' -> '_': diventa il nome di una temp
         # view Spark usata come identificatore SQL non quotato, che non ammette trattini.
@@ -154,9 +169,13 @@ def parse_contract_file(
 
         logger.debug(f"\n{'-'*30} CONTROLLI SODA ESTRATTI {'-'*30}\n{normalized_sodacl}\n{'-'*88}")
 
+    except ContractError:
+        # Già esplicativo e fatale: propaga senza riavvolgerlo.
+        raise
     except Exception as e:
-        logger.error(f"Errore durante l'elaborazione del file {filepath}: {str(e)}")
-        return None
+        raise ContractValidationError(
+            f"Errore durante l'elaborazione del file {filepath}: {e}"
+        ) from e
 
     return {
         "contract_path":    filepath,

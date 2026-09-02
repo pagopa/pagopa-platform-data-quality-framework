@@ -11,6 +11,7 @@ from soda.sampler.sample_ref import SampleRef
 
 from dq_framework.common.config import AppConfig
 from dq_framework.common import secrets
+from .errors import ScanExecutionError
 
 logger = logging.getLogger(__name__)
 
@@ -145,8 +146,9 @@ def run_dataframe_soda_scan(
                 logger.error(f"Errore durante la creazione della Temp View XREF per '{xref_full_name}': {e}")
 
     except Exception as e:
-        logger.error(f"Errore caricamento tabella Spark {contract['dataset']}: {e}")
-        return [], 0, MemorySampler()
+        raise ScanExecutionError(
+            f"Errore caricamento tabella Spark {contract['dataset']}: {e}"
+        ) from e
 
     logger.info(f"Esecuzione Soda Scan per la vista temporanea '{contract['table_name']}'...")
     logger.info(f"\n{'-'*30} Controlli generati {'-'*30}\n{contract['sodacl']}\n{'-'*88}")
@@ -201,5 +203,21 @@ def run_dataframe_soda_scan(
 
     checks = scan.get_scan_results().get("checks", [])
     logger.info(f"Soda scan completato: {len(checks)} check valutati.")
+
+    # scan.execute() NON solleva quando la query di un check va in errore (OOM,
+    # executor morto, SQL non valido): Soda registra l'errore nei propri log e
+    # scarta l'intero risultato. Senza questo controllo la pipeline proseguirebbe
+    # con 0 check e uscirebbe con exit code 0 -> job SUCCEEDED su CDE.
+    if scan.has_error_logs():
+        raise ScanExecutionError(
+            f"Scan Soda fallito su '{contract['table_name']}': una o piu' query di check "
+            f"sono andate in errore.\n{scan.get_error_logs_text()}"
+        )
+
+    if not checks:
+        raise ScanExecutionError(
+            f"Scan Soda su '{contract['table_name']}' non ha valutato alcun check: "
+            f"nessun esito da scrivere."
+        )
 
     return checks, total_rows, sampler
