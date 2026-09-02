@@ -16,18 +16,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Installa dipendenze di build
-        run: pip install build ruff
+      # Niente actions/setup-python: i suoi binari precompilati sono buildati per
+      # Ubuntu e non partono sull'immagine amazonlinux del runner CodeBuild.
+      # requires-python è >=3.10, quindi il python3 dell'immagine è sufficiente;
+      # il venv evita di dipendere dal PATH e da PEP 668.
+      - name: Prepara venv
+        run: |
+          python3 --version
+          python3 -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install build ruff
 
       - name: Lint
-        run: ruff check .
+        run: .venv/bin/ruff check .
 
       - name: Build wheel
-        run: python -m build --wheel
+        run: .venv/bin/python -m build --wheel
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

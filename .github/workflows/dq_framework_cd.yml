@@ -37,14 +37,14 @@ jobs:
             echo "value=-test" >> $GITHUB_OUTPUT
           fi
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
+      # Niente actions/setup-python: vedi la nota in dq_framework_ci.yml.
       - name: Build wheel
         run: |
-          pip install build
-          python -m build --wheel
+          python3 --version
+          python3 -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install build
+          .venv/bin/python -m build --wheel
 
       - name: Installa CDE CLI (se non disponibile)
         run: |
