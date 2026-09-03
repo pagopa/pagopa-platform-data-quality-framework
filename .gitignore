@@ -38,3 +38,21 @@ hs_err_pid*
 # Helm
 /helm/charts/*
 **/.terraform/
+
+
+# --- Build artifacts ---
+dist/
+build/
+*.egg-info/
+
+# --- File temporanei di PySpark ---
+derby.log
+metastore_db/
+spark-warehouse/
+
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+
+.claude
