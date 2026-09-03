@@ -151,9 +151,15 @@ def test_resolve_advance_outcomes_pass_only():
     assert _resolve_advance_outcomes(cfg) == ("pass",)
 
 
-def test_resolve_advance_outcomes_default_e_pass_only():
-    """Il default di AppConfig preserva il comportamento storico."""
-    assert _resolve_advance_outcomes(_make_config()) == ("pass",)
+def test_resolve_advance_outcomes_default_e_executed():
+    """Il default di AppConfig è "executed", scelta richiesta dal cliente.
+
+    Il watermark avanza anche sugli outcome warn e fail: una finestra temporale
+    che ha prodotto warn o fail non viene riesaminata al giro successivo. Il
+    comportamento alternativo (`pass_only`) resta disponibile in config ed è
+    coperto da test_resolve_advance_outcomes_pass_only.
+    """
+    assert _resolve_advance_outcomes(_make_config()) == ("pass", "warn", "fail")
 
 
 def test_resolve_advance_outcomes_executed():

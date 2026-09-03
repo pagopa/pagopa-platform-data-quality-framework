@@ -5,8 +5,8 @@ import os
 from .base import AppConfig
 from .dev import DEV_CONFIG
 from .dev_github import DEV_GITHUB_CONFIG
-from .test import TEST_CONFIG
 from .prod import PROD_CONFIG
+from .test import TEST_CONFIG
 
 _REGISTRY: dict[str, AppConfig] = {
     "dev": DEV_CONFIG,

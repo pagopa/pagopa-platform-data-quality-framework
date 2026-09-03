@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
+
 
 @dataclass(frozen=True)
 class AppConfig:
@@ -19,7 +21,7 @@ class AppConfig:
     # Results sink (Iceberg)
     results_database: str               # es. "pagopa_dev" / "pagopa_prod"
     results_write_enabled: bool = False # se False la pipeline non scrive su DB (utile in locale)
-    
+
     results_table_location: str | None = None  # opzionale: LOCATION usata in CREATE TABLE IF NOT EXISTS
 
     # Controlli incrementali

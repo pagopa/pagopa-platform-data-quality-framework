@@ -1,7 +1,8 @@
 import logging
+
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, struct, lit
-from pyspark.sql.types import StructType, StructField, StringType, LongType, IntegerType, BooleanType, TimestampType
+from pyspark.sql.functions import col, lit, struct
+from pyspark.sql.types import BooleanType, IntegerType, LongType, StringType, StructField, StructType, TimestampType
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -9,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 def setup_payment_option(spark: SparkSession, csv_path: str):
     logger.info(f"Generazione mock data per PAYMENT OPTION dal file: {csv_path}")
-    
+
     flat_csv_schema = StructType([
         StructField("dl_id", IntegerType(), True),
         StructField("op", StringType(), True),
@@ -17,7 +18,7 @@ def setup_payment_option(spark: SparkSession, csv_path: str):
         StructField("ts_us", LongType(), True),
         StructField("ts_ns", LongType(), True),
         StructField("dl_ingestion_tms", LongType(), True),
-        StructField("dl_event_tms", TimestampType(), True), 
+        StructField("dl_event_tms", TimestampType(), True),
         StructField("before", StringType(), True),
         StructField("after_id", LongType(), True),
         StructField("after_payment_position_id", LongType(), True),
@@ -36,13 +37,13 @@ def setup_payment_option(spark: SparkSession, csv_path: str):
     ])
 
     df_flat = spark.read.csv(csv_path, header=True, schema=flat_csv_schema)
-    
+
     # Creiamo la nidificazione per 'after' e una struct dummy coerente per 'before'
     # (Poiché il CSV piatto non ha i campi before_*, li inizializziamo a null col tipo corretto)
     df_nested = df_flat.select(
         col("dl_id"), col("op"), col("ts_ms"), col("ts_us"), col("ts_ns"),
         col("dl_ingestion_tms"), col("dl_event_tms"),
-        
+
         struct(
             lit(None).cast("int").alias("id"),
             lit(None).cast("int").alias("payment_position_id"),
@@ -74,14 +75,14 @@ def setup_payment_option(spark: SparkSession, csv_path: str):
             col("after_last_updated_date_notification_fee").alias("last_updated_date_notification_fee")
         ).alias("after")
     )
-    
+
     df_nested.write.mode("overwrite").saveAsTable("pagopa.silver_gpd_payment_option")
     logger.info("Tabella 'pagopa.silver_gpd_payment_option' creata con successo!")
 
 
 def setup_payment_position(spark: SparkSession, csv_path: str):
     logger.info(f"Generazione mock data per PAYMENT POSITION dal file: {csv_path}")
-    
+
     flat_csv_schema = StructType([
         StructField("dl_id", IntegerType(), True),
         StructField("op", StringType(), True),
@@ -113,11 +114,11 @@ def setup_payment_position(spark: SparkSession, csv_path: str):
     ])
 
     df_flat = spark.read.csv(csv_path, header=True, schema=flat_csv_schema)
-    
+
     df_nested = df_flat.select(
         col("dl_id"), col("op"), col("ts_ms"), col("ts_us"), col("ts_ns"),
         col("dl_ingestion_tms"), col("dl_event_tms"),
-        
+
         struct(
             lit(None).cast("int").alias("id"),
             lit(None).cast("string").alias("iupd"),
@@ -155,14 +156,14 @@ def setup_payment_position(spark: SparkSession, csv_path: str):
             col("after_service_type").alias("service_type")
         ).alias("after")
     )
-    
+
     df_nested.write.mode("overwrite").saveAsTable("pagopa.silver_gpd_payment_position")
     logger.info("Tabella 'pagopa.silver_gpd_payment_position' creata con successo!")
 
 
 def main():
     logger.info("Avvio ambiente PySpark locale (Hive Metastore)...")
-    
+
     spark = SparkSession.builder \
         .appName("mock_data_setup_all") \
         .master("local[*]") \

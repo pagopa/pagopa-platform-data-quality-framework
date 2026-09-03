@@ -5,12 +5,13 @@ from typing import Optional
 
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.storagelevel import StorageLevel
-from soda.scan import Scan
-from soda.sampler.sampler import Sampler
 from soda.sampler.sample_ref import SampleRef
+from soda.sampler.sampler import Sampler
+from soda.scan import Scan
 
-from dq_framework.common.config import AppConfig
 from dq_framework.common import secrets
+from dq_framework.common.config import AppConfig
+
 from .errors import ScanExecutionError
 
 logger = logging.getLogger(__name__)

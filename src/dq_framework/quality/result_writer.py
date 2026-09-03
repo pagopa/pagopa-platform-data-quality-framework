@@ -332,10 +332,10 @@ def run_manual_failed_queries(
 
     logger.info(f"Esecuzione di {len(pending)} failed query differite per il dettaglio record...")
 
-    
+
 
     for row in pending:
-        
+
         query_info = extracted_queries[row.check_name]
         base_query = query_info["query"]
         fields = query_info["fields"]

@@ -17,7 +17,6 @@ from __future__ import annotations
 # Gli import pyspark/dq_framework stanno DOPO pytest.importorskip (vedi sotto),
 # quindi E402 è atteso e va ignorato a livello di file.
 # ruff: noqa: E402
-
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -39,7 +38,6 @@ from pyspark.sql.types import (
 
 from dq_framework.common.config.base import AppConfig
 from dq_framework.quality import engine
-
 
 pytestmark = pytest.mark.integration
 
@@ -212,13 +210,17 @@ def test_pipeline_incrementale_due_run_consecutive(spark, setup_source_table, mo
     spark.sql(f"DROP TABLE IF EXISTS {_results_fqn(cfg)}")
 
     # --- Prima run: nessun watermark precedente, bootstrap ----------------
+    # Il bootstrap all'epoch non e' piu' implicito: da quando esiste
+    # watermark_bootstrap_from il valore va passato, altrimenti il resolver fa
+    # fail-fast invece di scandire silenziosamente tutto lo storico.
     engine.run_pipeline(
-        contract_path = contract_path,
-        repository    = "",
-        ref           = "main",
-        config        = cfg,
-        domain        = DOMAIN,
-        dl_layer      = DL_LAYER,
+        contract_path            = contract_path,
+        repository               = "",
+        ref                      = "main",
+        config                   = cfg,
+        domain                   = DOMAIN,
+        dl_layer                 = DL_LAYER,
+        watermark_bootstrap_from = datetime(1970, 1, 1),
     )
 
     # Il SodaCL passato a fake_scan deve avere il placeholder gia' sostituito

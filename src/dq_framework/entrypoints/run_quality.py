@@ -26,6 +26,7 @@ Invocazione da Airflow DAG:
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import re
 import sys
@@ -35,7 +36,6 @@ from dq_framework.common.config import load_config
 from dq_framework.common.logging import setup_logging
 from dq_framework.quality.engine import run_pipeline
 from dq_framework.quality.errors import DQFrameworkError
-import logging
 
 _SQL_IDENTIFIER_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 

@@ -25,7 +25,10 @@ jobs:
           python3 --version
           python3 -m venv .venv
           .venv/bin/python -m pip install --upgrade pip
-          .venv/bin/python -m pip install build ruff
+          # ruff è pinnato di proposito: i suoi default cambiano fra le release
+          # e senza pin il gate di lint si muove da sé. Il perimetro di regole
+          # è dichiarato in [tool.ruff.lint] nel pyproject.toml.
+          .venv/bin/python -m pip install build 'ruff==0.16.5'
 
       - name: Lint
         run: .venv/bin/ruff check .

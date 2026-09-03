@@ -44,3 +44,30 @@ markers = [
 # Ruff linter/formatter configuration
 [tool.ruff]
 line-length = 120
+
+[tool.ruff.lint]
+# Perimetro dichiarato di proposito. I default di ruff cambiano fra le release e
+# si sono allargati: il gate di lint in CI è diventato rosso senza che nessuno
+# toccasse il codice. Elencare qui le famiglie rende il controllo stabile nel
+# tempo e la scelta esplicita invece che subita. Va letto insieme al pin della
+# versione di ruff in .github/workflows/dq_framework_ci.yml.
+select = [
+    "E",   # pycodestyle, errori
+    "W",   # pycodestyle, warning (spazi di troppo, newline finale)
+    "F",   # pyflakes: import non usati, nomi non definiti
+    "I",   # isort: ordine dei blocchi di import
+    "UP",  # pyupgrade: sintassi allineata a requires-python >= 3.10
+]
+ignore = [
+    # Scelta di stile: nelle annotazioni si preferisce Optional[X] a X | None.
+    "UP045",
+]
+# Escluse consapevolmente, non per dimenticanza:
+#   DTZ  datetime senza tzinfo. Le 32 occorrenze sono tutte in fixture di test
+#        con date fisse volute; nel codice di produzione i timestamp passano
+#        dai watermark, dove il fuso è già gestito.
+#   BLE  except Exception larghi. In parte deliberati: vedi il lookup del
+#        watermark in quality/utils/incremental.py, che deve propagare.
+#   G    logger.error(..., exc_info=True) invece di logger.exception(...).
+#        Sono 4 e sono migliorie vere, ma da fare in un giro dedicato.
+#   PERF, SIM  segnalazioni singole di stile, nessun impatto misurabile.

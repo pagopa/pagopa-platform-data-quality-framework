@@ -4,26 +4,25 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
-from pyspark.sql import Row
 
-from pyspark.sql import SparkSession
+from pyspark.sql import Row, SparkSession
 
 from dq_framework.common.config import AppConfig
 
 # Import a livello di modulo: run_pipeline chiama i bare global, così i
 # monkeypatch dei test (monkeypatch.setattr(engine, ...)) si agganciano al
 # punto di chiamata effettivo.
-from .contract_parser import parse_contract_file, extract_and_clean_failed_queries
+from .contract_parser import extract_and_clean_failed_queries, parse_contract_file
 from .errors import ContractValidationError, ScanExecutionError
-from .utils.incremental import apply_incremental_conditions
-from .soda_executor import run_dataframe_soda_scan
 from .result_writer import (
     RESULTS_SCHEMA,
-    process_scan_results,
-    write_results_to_iceberg,
     process_and_write_failed_records,
+    process_scan_results,
     run_manual_failed_queries,
+    write_results_to_iceberg,
 )
+from .soda_executor import run_dataframe_soda_scan
+from .utils.incremental import apply_incremental_conditions
 from .utils.result_logging import log_contract_summary, log_results_summary
 
 logger = logging.getLogger(__name__)
@@ -124,7 +123,7 @@ def run_pipeline(
 
             actual_records = sampler.failed_data.get(r.check_name, [])
             row_dict["has_failed_records"] = len(actual_records) > 0
-            
+
             final_result_rows.append(Row(**row_dict))
 
         df_results = spark.createDataFrame(final_result_rows, schema=RESULTS_SCHEMA)

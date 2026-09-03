@@ -14,6 +14,7 @@ import re
 import yaml
 
 from dq_framework.common.config import AppConfig
+
 from .contract_reader import read_contract_doc
 from .errors import ContractError, ContractValidationError
 

@@ -14,8 +14,9 @@ import tempfile
 import requests
 import yaml
 
-from dq_framework.common.config import AppConfig
 from dq_framework.common import secrets
+from dq_framework.common.config import AppConfig
+
 from .errors import ContractNotReadableError
 
 logger = logging.getLogger(__name__)
@@ -113,7 +114,7 @@ def read_contract_doc(
         ) from e
 
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             doc = yaml.safe_load(f)
     except Exception as e:
         raise ContractNotReadableError(
