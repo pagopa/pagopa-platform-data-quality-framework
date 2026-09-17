@@ -44,3 +44,4 @@ quality:
             FROM pagopa.silver_gpd_payment_option
             WHERE after.amount < 0
           name: fld__vld__amount__non_negative
+      

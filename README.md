@@ -72,7 +72,7 @@ L'entrypoint chiama `run_pipeline`, un orchestratore sottile: coordina i moduli 
 
 3. **Estrazione delle failed-query** — i `failed-query-fields` (una chiave che Soda non conosce e che farebbe fallire l'engine) vengono tolti dallo YAML e messi da parte, *dopo* la sostituzione del watermark, così la query salvata ha già i timestamp risolti.
 
-4. **Scan Soda** — la tabella e le eventuali xref sono registrate come temp view e si esegue lo scan. Le righe fallite vengono catturate in RAM da un `MemorySampler`, mentre verso Soda Cloud i sample sono forzati a zero.
+4. **Scan Soda** — la tabella e le eventuali xref sono registrate come temp view e si esegue lo scan. Le righe fallite vengono catturate in RAM da un `MemorySampler`, mentre verso Soda Cloud i sample sono forzati a zero. L'invio a Soda Cloud è governato da `--soda-cloud-enabled` (default `false`): a `false` i secret `soda-creds` non vengono nemmeno letti e lo scan resta interamente on-prem. Il canale è quindi **opt-in**: va chiesto esplicitamente, non si eredita da un default.
 
 5. **Elaborazione degli esiti** — ogni check diventa una riga conforme allo schema dei risultati; il `check_name` è parsato secondo la naming convention (`fld__cmp__id__not_null` → categoria `field-level`, dimensione `completeness`, colonna `id`). Le colonne watermark si valorizzano solo per i check incrementali.
 
@@ -94,9 +94,9 @@ Tre livelli si sovrappongono, dal più stabile al più puntuale.
 
 `table_limit=0` lascia le view lazy così Iceberg può fare partition pruning/pushdown sui check incrementali; il 50 di `dev` materializza in cache una slice ridotta per velocità. `results_write_enabled=False` fa sì che in locale gli esiti restino solo a log. Gli altri campi dell'`AppConfig` governano la colonna watermark di default (`dl_event_tms`), la policy di avanzamento (`pass_only`/`executed`), il lookback per i late arrival, il numero di record falliti campionati per check e le primary key surrogate.
 
-**Override da CLI (per singolo run).** Gli argomenti di `run_quality` hanno priorità sui default dell'ambiente: `--domain` e `--dl-layer` (obbligatori, insieme decidono il nome delle tabelle di output — `<dl_layer>_dqf_<data_product>_results` — e sono validati come identificatori SQL semplici perché finiscono interpolati nella FQN), `--contract-path`/`--repository`/`--ref`, `--watermark-column` e `--watermark-from` (che bypassa il lookup automatico), `--primary-keys`, `--xref-datasets`, e `--dag-id`/`--airflow-run-id` (che di default leggono le variabili d'ambiente di Airflow).
+**Override da CLI (per singolo run).** Gli argomenti di `run_quality` hanno priorità sui default dell'ambiente: `--domain` e `--dl-layer` (obbligatori, insieme decidono il nome delle tabelle di output — `<dl_layer>_dqf_<data_product>_results` — e sono validati come identificatori SQL semplici perché finiscono interpolati nella FQN), `--contract-path`/`--repository`/`--ref`, `--watermark-column` e `--watermark-from` (che bypassa il lookup automatico), `--primary-keys`, `--xref-datasets`, `--soda-cloud-enabled` (`true`/`false`, attiva o disattiva la scrittura degli esiti su Soda Cloud; default `false`) e `--dag-id`/`--airflow-run-id` (che di default leggono le variabili d'ambiente di Airflow).
 
-**Segreti.** Pattern *file-then-env* (`common/secrets.py`): prima il file montato da CDE sotto `/etc/dex/secrets/<cred>/<key>`, poi la variabile d'ambiente (dal `.env` in locale). Vale per `GITHUB_TOKEN`, `SODA_API_KEY` e `SODA_API_SECRET`.
+**Segreti.** Pattern *file-then-env* (`common/secrets.py`): prima il file montato da CDE sotto `/etc/dex/secrets/<cred>/<key>`, poi la variabile d'ambiente (dal `.env` in locale). Vale per `GITHUB_TOKEN`, `SODA_API_KEY` e `SODA_API_SECRET`. I due secret Soda vengono letti solo se `--soda-cloud-enabled` è `true`: con il flag a `false` — che è il default — il lookup non parte affatto, così un canale spento per scelta si distingue nei log da uno spento per credenziali assenti.
 
 ## Perché è fatto così
 

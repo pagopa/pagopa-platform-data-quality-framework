@@ -52,6 +52,7 @@ def run_pipeline(
     watermark_bootstrap_from:  Optional[datetime]  = None,
     primary_keys:              Optional[list[str]] = None,
     xref_datasets:             Optional[list[str]] = None,
+    soda_cloud_enabled:        bool                = False,
 ) -> None:
     source_desc = f"{repository}@{ref}:{contract_path}" if repository else contract_path
     logger.info(
@@ -89,7 +90,9 @@ def run_pipeline(
     contract["sodacl"], extracted_queries = extract_and_clean_failed_queries(contract["sodacl"])
 
     logger.info("Esecuzione run_dataframe_soda_scan tramite Soda / PySpark")
-    soda_checks, total_rows, sampler = run_dataframe_soda_scan(spark, contract, config)
+    soda_checks, total_rows, sampler = run_dataframe_soda_scan(
+        spark, contract, config, soda_cloud_enabled=soda_cloud_enabled
+    )
 
     if soda_checks:
         result_rows.extend(process_scan_results(

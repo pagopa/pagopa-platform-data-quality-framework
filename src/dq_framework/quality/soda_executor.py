@@ -106,9 +106,20 @@ def _load_view(
 
 
 def run_dataframe_soda_scan(
-    spark: SparkSession, contract: dict, config: AppConfig
+    spark: SparkSession,
+    contract: dict,
+    config: AppConfig,
+    soda_cloud_enabled: bool = False,
 ) -> tuple[list[dict], int, MemorySampler]:
-    """Esegue la scansione SodaCL e restituisce: check, totale righe e il sampler con i failed_rows."""
+    """Esegue la scansione SodaCL e restituisce: check, totale righe e il sampler con i failed_rows.
+
+    `soda_cloud_enabled` governa il solo canale Soda Cloud: quando e' False i
+    secret `soda-creds` non vengono nemmeno letti e lo scan resta interamente
+    on-prem. Non ha alcun effetto sulle due tabelle Iceberg (results /
+    failed_records), che sono l'output primario e restano sempre scritte.
+    Il default e' False: la pubblicazione fuori dal perimetro va richiesta
+    esplicitamente, non ereditata da un default.
+    """
 
     limit_msg = f"(LIMIT {config.table_limit})" if config.table_limit and config.table_limit > 0 else "(NESSUN LIMITE)"
     logger.info(f"Caricamento dataframe per dataset: {contract['dataset']} {limit_msg}")
@@ -171,10 +182,19 @@ def run_dataframe_soda_scan(
     # imposta direttamente il campo letto da Soda in metric.py. Separato dal cloud.
     scan._configuration.samples_limit = config.failed_sample_limit
 
-    soda_api_key    = secrets.soda_api_key()
-    soda_api_secret = secrets.soda_api_secret()
+    # I secret Soda vengono letti SOLO se il canale cloud e' attivo: con il flag
+    # a false non si tocca affatto /etc/dex/secrets (ne' le env var di fallback).
+    soda_api_key    = secrets.soda_api_key() if soda_cloud_enabled else None
+    soda_api_secret = secrets.soda_api_secret() if soda_cloud_enabled else None
 
-    if soda_api_key and soda_api_secret:
+    if not soda_cloud_enabled:
+        # Log distinto dal warning "credenziali mancanti" qui sotto: nei log di CDE
+        # si vede se il canale e' spento per scelta o per credenziali assenti.
+        logger.info(
+            "Soda Cloud DISATTIVATO da configurazione: secret 'soda-creds' non letti, "
+            "nessuna metrica inviata. Gli esiti restano on-prem (tabelle results/failed_records)."
+        )
+    elif soda_api_key and soda_api_secret:
         logger.info("Credenziali Soda Cloud rilevate. Invio metriche aggregate attivato (nessun dettaglio record).")
         # samples_limit FISSO a 0 (non configurabile): nessuna failed-row viene mai
         # caricata su Soda Cloud. Il dettaglio-record resta on-prem nel MemorySampler
@@ -189,7 +209,7 @@ def run_dataframe_soda_scan(
         scan.add_configuration_yaml_str(soda_cfg)
         scan.set_scan_definition_name(contract["contract_title"])
     else:
-        logger.warning("Credenziali Soda Cloud mancanti: l'esecuzione avverrà solo in locale.")
+        logger.warning("Soda Cloud attivo ma credenziali mancanti: l'esecuzione avverrà solo in locale.")
 
     try:
         logger.info(f"Avvio Soda scan.execute() sulla vista '{contract['table_name']}'...")

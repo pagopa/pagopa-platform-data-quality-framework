@@ -81,6 +81,20 @@ def _parse_iso_datetime(value: str) -> datetime:
         ) from exc
 
 
+def _parse_bool(value: str) -> bool:
+    """Parser argparse per i flag booleani passati nella forma `--flag=true`.
+
+    Non si puo' usare `action="store_true"`: il DAG Airflow compone gli args del
+    job Spark come lista di stringhe `--chiave=valore`, forma che `store_true`
+    rifiuta. Il valore arriva quindi sempre esplicito e va convertito qui.
+
+    Solo "true" vale True; qualunque altro input, refuso compreso, vale False.
+    Non solleva: per i flag che aprono un canale verso l'esterno il fail-safe e'
+    restare chiusi, non fermare il job.
+    """
+    return value.strip().lower() == "true"
+
+
 def _parse_primary_keys(value: str) -> list[str]:
     """Parser argparse per --primary-keys: lista separata da virgola.
 
@@ -217,6 +231,19 @@ def _parse_args(
         default=None,
         help="Lista di tabelle xref separate da virgola (con priorità rispetto al Data Contract)",
     )
+    parser.add_argument(
+        "--soda-cloud-enabled",
+        type=_parse_bool,
+        default=False,
+        help=(
+            "Abilita (true) o disabilita (false) la scrittura degli esiti su Soda "
+            "Cloud. Con false i secret 'soda-creds' non vengono nemmeno letti e lo "
+            "scan resta interamente on-prem; le tabelle Iceberg results e "
+            "failed_records vengono scritte in entrambi i casi. Default: false, "
+            "quindi il canale cloud e' opt-in esplicito: chi non passa il flag non "
+            "pubblica nulla fuori dal perimetro."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -254,6 +281,7 @@ def _run(args: argparse.Namespace, config) -> None:
         watermark_bootstrap_from  = args.watermark_bootstrap_from,
         primary_keys              = args.primary_keys,
         xref_datasets             = args.xref_datasets,
+        soda_cloud_enabled        = args.soda_cloud_enabled,
     )
 
 

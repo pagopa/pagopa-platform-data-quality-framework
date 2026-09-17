@@ -154,7 +154,7 @@ def test_pipeline_incrementale_due_run_consecutive(spark, setup_source_table, mo
     # parsing placeholder, lookup, write su tabella results, riuso del watermark.
     captured_sodacl: list[str] = []
 
-    def fake_scan(spark_, contract, config_):
+    def fake_scan(spark_, contract, config_, soda_cloud_enabled=False):
         captured_sodacl.append(contract["sodacl"])
         # Generiamo un check 'pass' per ognuno dei 3 check del contract fixture
         return (
