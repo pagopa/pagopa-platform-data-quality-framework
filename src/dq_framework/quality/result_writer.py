@@ -96,9 +96,26 @@ def _as_string(value) -> Optional[str]:
     return str(value)
 
 
-def _failed_row_count(check: dict, diagnostics: dict) -> Optional[int]:
+def _failed_row_count(
+    check: dict, diagnostics: dict, custom_count_check_names: Optional[set] = None
+) -> Optional[int]:
+    """Determina se `diagnostics['value']` rappresenta un conteggio di righe fallite.
+
+    Tre casistiche, tutte con semantica "value = numero di righe che violano il check":
+      1. Check nativi Soda il cui metric è uno dei contatori noti
+         (missing_count/invalid_count/duplicate_count/failed_rows);
+      2. Check con sintassi SodaCL 'failed rows:' (query che restituisce le righe stesse);
+      3. Check custom a query SQL singola (naming ent__/xref__/fld__cns__ ecc.), es.
+         `{check_name} query: SELECT COUNT(*) ...` con soglia `= 0`: qui il metric
+         Soda è il nome del check stesso e NON matcha i pattern noti del punto 1, per cui
+         va riconosciuto tramite `custom_count_check_names` — l'insieme dei check_name
+         estratti da `extract_and_clean_failed_queries` (stessa query COUNT(*) riusata
+         da `run_manual_failed_queries` per il dettaglio dei record falliti: se una query
+         è lì, il suo `value` è per costruzione un conteggio di righe fallite).
+    """
     metrics = check.get("metrics", []) or []
     check_def = check.get("definition", "").lower()
+    check_name = check.get("name") or ""
 
     is_bad_row_count = False
     for metric in metrics:
@@ -108,6 +125,9 @@ def _failed_row_count(check: dict, diagnostics: dict) -> Optional[int]:
             break
 
     if not is_bad_row_count and "failed rows:" in check_def:
+        is_bad_row_count = True
+
+    if not is_bad_row_count and custom_count_check_names and check_name in custom_count_check_names:
         is_bad_row_count = True
 
     if is_bad_row_count:
@@ -135,6 +155,7 @@ def process_scan_results(
     watermark_column:  Optional[str]                    = None,
     per_check_wm_from: Optional[dict[str, datetime]]    = None,
     wm_to:             Optional[datetime]               = None,
+    custom_count_check_names: Optional[set]             = None,
 ) -> list[Row]:
     """Elabora i risultati dello scan Soda trasformandoli in Row PySpark
     conformi allo schema della tabella Iceberg {dl_layer}_dqf_{domain}_results.
@@ -143,6 +164,11 @@ def process_scan_results(
     (quelli il cui `check_name` compare in `per_check_wm_from`); per i massivi
     restano NULL, così il lookup distingue "ultima run pass incrementale" da
     "ultima run pass qualsiasi".
+
+    `custom_count_check_names` è l'insieme dei check_name con query 'COUNT(*)'
+    custom (le chiavi di `extracted_queries`, vedi `_failed_row_count`): serve a
+    popolare `row_count_failed` anche per questi check, il cui metric Soda non è
+    uno dei contatori nativi noti.
     """
     execution_date = scan_ts.date()
     per_check_wm_from = per_check_wm_from or {}
@@ -163,7 +189,7 @@ def process_scan_results(
         category, dimension, column_from_name = _parse_check_name(check_name)
         check_column = check.get("column") or column_from_name
 
-        row_count_failed = _failed_row_count(check, diagnostics)
+        row_count_failed = _failed_row_count(check, diagnostics, custom_count_check_names)
         has_failed_records = (
             outcome.lower() == "fail"
             or (row_count_failed is not None and row_count_failed > 0)

@@ -83,14 +83,6 @@ def _parse_iso_datetime(value: str) -> datetime:
 
 def _parse_bool(value: str) -> bool:
     """Parser argparse per i flag booleani passati nella forma `--flag=true`.
-
-    Non si puo' usare `action="store_true"`: il DAG Airflow compone gli args del
-    job Spark come lista di stringhe `--chiave=valore`, forma che `store_true`
-    rifiuta. Il valore arriva quindi sempre esplicito e va convertito qui.
-
-    Solo "true" vale True; qualunque altro input, refuso compreso, vale False.
-    Non solleva: per i flag che aprono un canale verso l'esterno il fail-safe e'
-    restare chiusi, non fermare il job.
     """
     return value.strip().lower() == "true"
 

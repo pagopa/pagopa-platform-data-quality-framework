@@ -109,6 +109,7 @@ def run_pipeline(
             watermark_column  = effective_watermark_column,
             per_check_wm_from = per_check_wm,
             wm_to             = scan_ts if per_check_wm else None,
+            custom_count_check_names = set(extracted_queries),
         ))
         log_contract_summary(soda_checks, contract["contract_title"])
     else:
