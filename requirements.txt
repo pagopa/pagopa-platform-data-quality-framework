@@ -18,3 +18,5 @@ soda-core==3.5.6
 # Connettori per permettere a Soda di leggere i dati direttamente da PySpark
 soda-core-spark-df==3.5.6
 soda-core-spark==3.5.6
+
+pyarrow

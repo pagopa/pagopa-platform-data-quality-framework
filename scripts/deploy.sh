@@ -36,7 +36,8 @@
 # PREREQUISITI (una tantum):
 #     1. `cde` CLI installato e autenticato
 #     2. Python env resource dq-framework-pyenv-<env> gia' creato su CDE
-#     3. Workload credential `github-token` configurata sul vcluster
+#     3. Workload credential `github-token` (chiave `token`) e `soda-creds`
+#        (chiavi `api_key`, `api_secret`) configurate sul vcluster
 #     4. Pacchetto Python `build` installato in locale (`pip install build`)
 #     5. Migrazione DDL applicata sulla tabella results del'ambiente
 #        (script: migrations/001_add_watermark_columns.sql)
@@ -164,6 +165,7 @@ cde job "${ACTION_ARGS[@]}" \
     --mount-1-resource "$RESOURCE" \
     --python-env-resource-name "$PYENV" \
     --workload-credential github-token \
+    --workload-credential soda-creds \
     --conf "spark.kubernetes.driverEnv.ENV=${ENV_NAME}" \
     --conf "spark.executorEnv.ENV=${ENV_NAME}" \
     "${JOB_ARGS[@]}"
