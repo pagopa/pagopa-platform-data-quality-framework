@@ -1,0 +1,44 @@
+name: CI — Build & Lint
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    # Runner self-hosted CodeBuild (progetto pagopa-platform-data-quality-framework-runner,
+    # account 407424444552, eu-south-1). run_id e run_attempt nel label sono obbligatori:
+    # è così che CodeBuild lega il runner effimero alla singola esecuzione del job.
+    runs-on:
+      - codebuild-pagopa-platform-data-quality-framework-runner-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Niente actions/setup-python: i suoi binari precompilati sono buildati per
+      # Ubuntu e non partono sull'immagine amazonlinux del runner CodeBuild.
+      # requires-python è >=3.10, quindi il python3 dell'immagine è sufficiente;
+      # il venv evita di dipendere dal PATH e da PEP 668.
+      - name: Prepara venv
+        run: |
+          python3 --version
+          python3 -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          # ruff è pinnato di proposito: i suoi default cambiano fra le release
+          # e senza pin il gate di lint si muove da sé. Il perimetro di regole
+          # è dichiarato in [tool.ruff.lint] nel pyproject.toml.
+          .venv/bin/python -m pip install build 'ruff==0.16.5'
+
+      - name: Lint
+        run: .venv/bin/ruff check .
+
+      - name: Build wheel
+        run: .venv/bin/python -m build --wheel
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dq-framework-whl
+          path: dist/*.whl
+          retention-days: 7
