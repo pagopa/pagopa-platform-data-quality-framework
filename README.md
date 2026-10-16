@@ -21,6 +21,7 @@ Lo sviluppo avviene dentro il **Dev Container** in `.devcontainer/`, che fissa u
    SODA_HOST=cloud.soda.io
    SODA_API_KEY=<opzionale>
    SODA_API_SECRET=<opzionale>
+   DQF_BLOB_SAS_TOKEN=<opzionale, solo per l'export verso Azure Blob>
    ```
 
 2. Apri la cartella in VS Code → `F1` → **Dev Containers: Reopen in Container**. Alla creazione il container installa le dipendenze e il pacchetto in modalità editabile (`pip install -r requirements.txt && pip install -e '.[dev]'`), così ogni modifica al sorgente è subito attiva senza rebuild.
@@ -78,6 +79,8 @@ L'entrypoint chiama `run_pipeline`, un orchestratore sottile: coordina i moduli 
 
 6. **Scrittura** — gli esiti vanno in due tabelle Iceberg: `<dl_layer>_dqf_<dominio>_results` (log granulare, una riga per check per run) e `<dl_layer>_dqf_<dominio>_failed_records` (dettaglio dei record scartati, ricostruito ri-eseguendo le failed-query differite con la primary key passata da `--primary-keys`). In `dev` la scrittura è disattivata e resta tutto a log.
 
+7. **Export verso Azure Blob** — opzionale, governato da `--blob-export-enabled` (default `false`). Superset gira su Azure e non può interrogare Cloudera, quindi `observability/blob_export` copia sul container Blob, in Parquet, **tutto lo storico** results del dataset appena controllato: `results/dl_layer=<dl_layer>/domain=<dominio>/<dataset>.parquet`. Il file viene sovrascritto a ogni run, così retry e rilanci non creano duplicati e la retention si riflette anche su Azure. La tabella `failed_records` va esportata a parte con `--blob-export-failed-records-enabled` (default `false`, vedi sotto). È un canale secondario come Soda Cloud: un errore di export finisce a log ma non fa fallire il run, perché il retry del task Airflow rieseguirebbe la pipeline e accoderebbe su Iceberg gli esiti una seconda volta.
+
 Il punto che lega il tutto: la tabella `results` è insieme output e memoria. Il passo 2 rilegge da lì il watermark dei run precedenti filtrando per esito. Con la policy di default (`executed`) il watermark avanza su ogni check eseguito, anche se in warn o fail, quindi una finestra fallita non viene riesaminata; con `pass_only` avanza solo sui run riusciti e una finestra che fallisce viene riprocessata finché il check non torna verde.
 
 ## Configurazione
@@ -94,9 +97,9 @@ Tre livelli si sovrappongono, dal più stabile al più puntuale.
 
 `table_limit=0` lascia le view lazy così Iceberg può fare partition pruning/pushdown sui check incrementali; il 50 di `dev` materializza in cache una slice ridotta per velocità. `results_write_enabled=False` fa sì che in locale gli esiti restino solo a log. Gli altri campi dell'`AppConfig` governano la colonna watermark di default (`dl_event_tms`), la policy di avanzamento (`executed`, default, oppure `pass_only`), il lookback per i late arrival, il numero di record falliti campionati per check e le primary key surrogate.
 
-**Override da CLI (per singolo run).** Gli argomenti di `run_quality` hanno priorità sui default dell'ambiente: `--domain` e `--dl-layer` (obbligatori, insieme decidono il nome delle tabelle di output — `<dl_layer>_dqf_<data_product>_results` — e sono validati come identificatori SQL semplici perché finiscono interpolati nella FQN), `--contract-path`/`--repository`/`--ref`, `--watermark-column`, `--watermark-from` (che bypassa il lookup automatico) e `--watermark-bootstrap-from` (punto di partenza per i check senza storico), `--primary-keys`, `--xref-datasets`, `--soda-cloud-enabled` (`true`/`false`, attiva o disattiva la scrittura degli esiti su Soda Cloud; default `false`) e `--dag-id`/`--airflow-run-id` (che di default leggono le variabili d'ambiente di Airflow).
+**Override da CLI (per singolo run).** Gli argomenti di `run_quality` hanno priorità sui default dell'ambiente: `--domain` e `--dl-layer` (obbligatori, insieme decidono il nome delle tabelle di output — `<dl_layer>_dqf_<data_product>_results` — e sono validati come identificatori SQL semplici perché finiscono interpolati nella FQN), `--contract-path`/`--repository`/`--ref`, `--watermark-column`, `--watermark-from` (che bypassa il lookup automatico) e `--watermark-bootstrap-from` (punto di partenza per i check senza storico), `--primary-keys`, `--xref-datasets`, `--soda-cloud-enabled` (`true`/`false`, attiva o disattiva la scrittura degli esiti su Soda Cloud; default `false`), `--blob-export-enabled` e `--blob-export-failed-records-enabled` (`true`/`false`, export su Azure Blob degli esiti e dei record falliti; default `false`) e `--dag-id`/`--airflow-run-id` (che di default leggono le variabili d'ambiente di Airflow).
 
-**Segreti.** Pattern *file-then-env* (`common/secrets.py`): prima il file montato da CDE sotto `/etc/dex/secrets/<cred>/<key>`, poi la variabile d'ambiente (dal `.env` in locale). Vale per `GITHUB_TOKEN`, `SODA_API_KEY` e `SODA_API_SECRET`. I due secret Soda vengono letti solo se `--soda-cloud-enabled` è `true`: con il flag a `false` — che è il default — il lookup non parte affatto, così un canale spento per scelta si distingue nei log da uno spento per credenziali assenti.
+**Segreti.** Pattern *file-then-env* (`common/secrets.py`): prima il file montato da CDE sotto `/etc/dex/secrets/<cred>/<key>`, poi la variabile d'ambiente (dal `.env` in locale). Vale per `GITHUB_TOKEN`, `SODA_API_KEY`, `SODA_API_SECRET` e `DQF_BLOB_SAS_TOKEN` (workload credential `dqf-blob-sas`, chiave `sas_token`). I due secret Soda vengono letti solo se `--soda-cloud-enabled` è `true`: con il flag a `false` — che è il default — il lookup non parte affatto, così un canale spento per scelta si distingue nei log da uno spento per credenziali assenti. Lo stesso vale per il SAS token, letto solo con `--blob-export-enabled=true`; lo storage account di destinazione è invece per ambiente (`AppConfig.blob_export_account`).
 
 ## Perché è fatto così
 
@@ -114,7 +117,7 @@ Gli esiti sono separati in due tabelle con scopi diversi: `<dl_layer>_dqf_<domin
 
 ### Il dettaglio delle righe fallite resta on-prem
 
-I dati trattati sono di pagamento e contengono PII (nei contratti alcuni campi sono marcati `pii: true`). Per questo le righe che falliscono un controllo vengono catturate in RAM da un sampler custom (`MemorySampler`) e persistite nella tabella Iceberg on-prem, mentre verso Soda Cloud il `samples_limit` è forzato a `0`: alla dashboard arrivano solo le metriche aggregate, mai un singolo record. La cattura locale e l'upload cloud sono due percorsi distinti e indipendenti, proprio per garantire che il dettaglio sensibile non lasci il perimetro.
+I dati trattati sono di pagamento e contengono PII (nei contratti alcuni campi sono marcati `pii: true`). Per questo le righe che falliscono un controllo vengono catturate in RAM da un sampler custom (`MemorySampler`) e persistite nella tabella Iceberg on-prem, mentre verso Soda Cloud il `samples_limit` è forzato a `0`: alla dashboard arrivano solo le metriche aggregate, mai un singolo record. La cattura locale e l'upload cloud sono due percorsi distinti e indipendenti, proprio per garantire che il dettaglio sensibile non lasci il perimetro. Per lo stesso motivo l'export verso Azure Blob ha un flag dedicato per `failed_records` (`--blob-export-failed-records-enabled`), spento di default: con il solo `--blob-export-enabled` escono le metriche dei check, non i valori dei record.
 
 ### Lo stesso wheel gira identico in locale e su CDE
 

@@ -105,6 +105,47 @@ def _load_view(
     return df, persisted
 
 
+def _publish_full_dataset_name(scan: Scan, view_name: str, dataset: str) -> None:
+    """Fa comparire su Soda Cloud il dataset col nome completo del contract
+    (es. 'pagopa.silver_touchpoints') invece del nome della temp view.
+
+    Soda invia al Cloud come 'table' il nome dell'header 'checks for <x>', che qui
+    e' la temp view: senza intervento il prefisso del DB si perde. Il nome completo
+    non puo' andare nell'header, perche' lo spark_df di Soda non quota i nomi
+    tabella: 'FROM pagopa.silver_touchpoints' leggerebbe la tabella del catalogo
+    scavalcando la temp view (e il table_limit di dev). Si rinomina quindi il solo
+    payload diretto al Cloud: SQL generato, scan.get_scan_results() e tabelle
+    Iceberg restano sul nome della view.
+
+    Si appoggia a un interno di soda-core 3.5.x: SodaCloud.send_scan_results
+    chiama self.build_scan_results(scan), qui avvolto sull'istanza. Se l'interno
+    sparisce si logga un warning e si pubblica col nome della view, senza far
+    fallire lo scan.
+    """
+    if dataset == view_name:
+        return
+
+    soda_cloud = getattr(scan._configuration, "soda_cloud", None)
+    build_scan_results = getattr(soda_cloud, "build_scan_results", None)
+    if build_scan_results is None:
+        logger.warning(
+            f"Soda Cloud: impossibile rinominare il dataset in '{dataset}', "
+            f"verra' pubblicato come '{view_name}'."
+        )
+        return
+
+    def build_with_full_dataset_name(scan_: Scan) -> dict:
+        results = build_scan_results(scan_)
+        for key in ("checks", "automatedMonitoringChecks"):
+            for check in results.get(key) or []:
+                if isinstance(check, dict) and check.get("table") == view_name:
+                    check["table"] = dataset
+        return results
+
+    soda_cloud.build_scan_results = build_with_full_dataset_name
+    logger.info(f"Soda Cloud: dataset pubblicato come '{dataset}' (temp view '{view_name}').")
+
+
 def run_dataframe_soda_scan(
     spark: SparkSession,
     contract: dict,
@@ -208,6 +249,7 @@ def run_dataframe_soda_scan(
         """
         scan.add_configuration_yaml_str(soda_cfg)
         scan.set_scan_definition_name(contract["contract_title"])
+        _publish_full_dataset_name(scan, contract["table_name"], contract["dataset"])
     else:
         logger.warning("Soda Cloud attivo ma credenziali mancanti: l'esecuzione avverrà solo in locale.")
 

@@ -24,6 +24,12 @@ class AppConfig:
 
     results_table_location: str | None = None  # opzionale: LOCATION usata in CREATE TABLE IF NOT EXISTS
 
+    # Export verso Azure Blob Storage (letto da Superset), attivato da --blob-export-enabled.
+    #   Storage account di destinazione: se None l'export non e' configurato per
+    #   l'ambiente e, anche con il flag acceso, viene saltato con un errore a log.
+    blob_export_account: str | None = None
+    blob_export_container: str = "dqf-data"
+
     # Controlli incrementali
     #   Placeholder atteso nelle query SodaCL custom; quando presente in una query
     #   il framework risolve il watermark per-check e sostituisce monoliticamente

@@ -52,3 +52,7 @@ def soda_api_key() -> str | None:
 
 def soda_api_secret() -> str | None:
     return read_secret("soda-creds", "api_secret", "SODA_API_SECRET")
+
+
+def blob_export_sas_token() -> str | None:
+    return read_secret("dqf-blob-sas", "sas_token", "DQF_BLOB_SAS_TOKEN")

@@ -14,6 +14,7 @@ dependencies = [
     "soda-core-spark",   # Soda Core data quality library with Spark backend
     "pyyaml",            # YAML parsing for data contracts and config
     "requests",          # HTTP client for downloading contracts from GitHub
+    "pyarrow",           # Parquet serialization for the Azure Blob export
 ]
 
 [project.optional-dependencies]

@@ -8,6 +8,7 @@ from typing import Optional
 from pyspark.sql import Row, SparkSession
 
 from dq_framework.common.config import AppConfig
+from dq_framework.observability.blob_export import export_to_blob
 
 # Import a livello di modulo: run_pipeline chiama i bare global, così i
 # monkeypatch dei test (monkeypatch.setattr(engine, ...)) si agganciano al
@@ -53,6 +54,8 @@ def run_pipeline(
     primary_keys:              Optional[list[str]] = None,
     xref_datasets:             Optional[list[str]] = None,
     soda_cloud_enabled:        bool                = False,
+    blob_export_enabled:       bool                = False,
+    blob_export_failed_records_enabled: bool       = False,
 ) -> None:
     source_desc = f"{repository}@{ref}:{contract_path}" if repository else contract_path
     logger.info(
@@ -141,6 +144,20 @@ def run_pipeline(
         process_and_write_failed_records(
             spark, final_result_rows, sampler, config, effective_primary_keys, domain, dl_layer
         )
+
+        # Export verso Azure Blob (Superset)
+        if blob_export_enabled:
+            export_to_blob(
+                spark, config, domain, dl_layer,
+                datasets               = sorted({r.dataset for r in final_result_rows}),
+                include_failed_records = blob_export_failed_records_enabled,
+            )
+        else:
+            logger.info("Export verso Azure Blob DISATTIVATO da configurazione: nessun file scritto.")
+            if blob_export_failed_records_enabled:
+                logger.warning(
+                    "blob_export_failed_records_enabled=True ignorato: vale solo con blob_export_enabled=True."
+                )
     else:
         raise ScanExecutionError(
             f"Nessun risultato elaborato per {contract['contract_title']}: "

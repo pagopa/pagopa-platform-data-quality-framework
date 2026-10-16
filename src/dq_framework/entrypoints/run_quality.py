@@ -236,6 +236,28 @@ def _parse_args(
             "pubblica nulla fuori dal perimetro."
         ),
     )
+    parser.add_argument(
+        "--blob-export-enabled",
+        type=_parse_bool,
+        default=False,
+        help=(
+            "Abilita (true) o disabilita (false) l'export degli esiti su Azure Blob "
+            "Storage, da cui li legge Superset. A fine run riscrive in Parquet tutto lo "
+            "storico results del dataset controllato. Con false il SAS token non viene "
+            "nemmeno letto. Un errore di export viene loggato ma non fa fallire il run. "
+            "Default: false."
+        ),
+    )
+    parser.add_argument(
+        "--blob-export-failed-records-enabled",
+        type=_parse_bool,
+        default=False,
+        help=(
+            "Esporta su Azure Blob anche la tabella failed_records, che contiene valori "
+            "reali dei record (PII). Vale solo con --blob-export-enabled=true. "
+            "Default: false, da accendere solo con l'approvazione del cliente."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -274,6 +296,8 @@ def _run(args: argparse.Namespace, config) -> None:
         primary_keys              = args.primary_keys,
         xref_datasets             = args.xref_datasets,
         soda_cloud_enabled        = args.soda_cloud_enabled,
+        blob_export_enabled       = args.blob_export_enabled,
+        blob_export_failed_records_enabled = args.blob_export_failed_records_enabled,
     )
 
 
