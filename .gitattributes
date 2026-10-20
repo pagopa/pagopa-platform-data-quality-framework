@@ -1,0 +1,8 @@
+# Script eseguiti da bash e Makefile devono restare LF anche quando il repo e'
+# clonato su Windows con core.autocrlf=true (il default di Git for Windows).
+# Con CRLF bash tratta il \r come parte del comando e il file non parte:
+#     ./scripts/deploy.sh: line 44: $'\r': command not found
+#     line 45: set: pipefail: invalid option name
+*.sh      text eol=lf
+Makefile  text eol=lf
+* text=auto eol=lf
