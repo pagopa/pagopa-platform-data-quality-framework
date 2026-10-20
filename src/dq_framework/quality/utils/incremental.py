@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import re
+import uuid
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -39,6 +40,17 @@ _ADVANCE_OUTCOMES: dict[str, tuple[str, ...]] = {
     "pass_only": ("pass",),
     "executed":  ("pass", "warn", "fail"),
 }
+
+# Identity Soda Cloud dei check incrementali (vedi `_incremental_check_identity`).
+# Namespace uuid5 fisso: cambiarlo cambia l'identity di TUTTI i check incrementali
+# e su Soda Cloud ne azzera lo storico.
+_IDENTITY_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "dq_framework/incremental-check-identity")
+# Chiavi escluse dall'hash: quelle che Soda stesso ignora in Check.create_identity,
+# più 'failed-query-fields', che il framework toglie prima dello scan.
+_IDENTITY_IGNORED_KEYS = frozenset({
+    "name", "identity", "attributes", "samples limit", "template", "warn_only",
+    "failed-query-fields",
+})
 
 
 def _resolve_advance_outcomes(config: AppConfig) -> tuple[str, ...]:
@@ -189,6 +201,33 @@ def _incremental_fields(check_body: dict) -> list[str]:
     ]
 
 
+def _incremental_check_identity(
+    data_source: str,
+    checks_header: str,
+    check_type: str,
+    check_body: dict,
+) -> str:
+    """Identity Soda Cloud stabile per un check incrementale.
+
+    Soda identifica un check con un hash della sua definizione, `filter` e
+    `* query` compresi. Il placeholder viene sostituito col watermark prima
+    dello scan, quindi senza un'identity esplicita l'hash cambierebbe a ogni run
+    e Soda Cloud vedrebbe ogni giorno un check nuovo, senza storico.
+
+    L'hash qui è calcolato sulla definizione col placeholder NON risolto: resta
+    uguale tra le run, ma cambia se cambia la definizione del check (soglia,
+    filtro, query), esattamente come per i check massivi. Va chiamata PRIMA della
+    sostituzione del placeholder.
+    """
+    body = {k: v for k, v in check_body.items() if k not in _IDENTITY_IGNORED_KEYS}
+    canonical = yaml.safe_dump(
+        {"data_source": data_source, "header": checks_header, "check": {check_type: body}},
+        sort_keys=True,
+        allow_unicode=True,
+    )
+    return str(uuid.uuid5(_IDENTITY_NAMESPACE, canonical))
+
+
 def _resolve_per_check_watermarks(
     spark: SparkSession,
     config: AppConfig,
@@ -203,7 +242,9 @@ def _resolve_per_check_watermarks(
     """Walk del SodaCL con sostituzione per-check del placeholder.
 
     Ritorna `(sodacl_yaml, per_check_wm)`: il secondo mappa `check_name -> wm_from`
-    solo per i check incrementali (i massivi non compaiono). Risoluzione di wm_from,
+    solo per i check incrementali (i massivi non compaiono). A ogni check
+    incrementale senza `identity` ne aggiunge una stabile tra le run (vedi
+    `_incremental_check_identity`). Risoluzione di wm_from,
     in ordine di priorità:
       1. `cli_override` (--watermark-from): vince su tutto, stesso valore per
          TUTTI i check incrementali del run, nessuna query al DB.
@@ -256,6 +297,13 @@ def _resolve_per_check_watermarks(
                 if not target_fields:
                     # Check massivo (nessun placeholder): non lo tocchiamo
                     continue
+
+                # Identity Soda Cloud calcolata qui, sul placeholder ancora non
+                # risolto; un'identity esplicita nel contract ha la precedenza.
+                if "identity" not in check_body:
+                    check_body["identity"] = _incremental_check_identity(
+                        config.data_source, key, check_type, check_body,
+                    )
 
                 # Risoluzione wm_from per questo specifico check
                 if cli_override is not None:
