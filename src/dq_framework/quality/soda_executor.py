@@ -232,8 +232,7 @@ def run_dataframe_soda_scan(
         # Log distinto dal warning "credenziali mancanti" qui sotto: nei log di CDE
         # si vede se il canale e' spento per scelta o per credenziali assenti.
         logger.info(
-            "Soda Cloud DISATTIVATO da configurazione: secret 'soda-creds' non letti, "
-            "nessuna metrica inviata. Gli esiti restano on-prem (tabelle results/failed_records)."
+            "Soda Cloud DISATTIVATO da configurazione: secret 'soda-creds' non letti, nessuna metrica inviata."
         )
     elif soda_api_key and soda_api_secret:
         logger.info("Credenziali Soda Cloud rilevate. Invio metriche aggregate attivato (nessun dettaglio record).")
