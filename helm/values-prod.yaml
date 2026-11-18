@@ -68,6 +68,7 @@ microservice-chart:
           type: Utilization # Allowed types are 'Utilization' or 'AverageValue'
           value: "75"
   envConfig:
+    JAVA_TOOL_OPTIONS: "-XX:-UseBASE64Intrinsics -XX:UseAVX=2"
     APP_NAME: "yourProjectName" # TODO
     APP_ENVIRONMENT: "prod"
     # TODO: set your name
