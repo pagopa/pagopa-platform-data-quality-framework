@@ -54,13 +54,13 @@ _SPARK_TO_ARROW = {
     "timestamp_ntz": pa.timestamp("us"),
 }
 
-# Versione delle API Blob: coincide con il campo `sv` del SAS token in uso.
+# Versione delle API Blob
 _BLOB_API_VERSION = "2018-11-09"
 _UPLOAD_TIMEOUT_SECONDS = 120
 # Attese tra un tentativo e l'altro: 3 tentativi in tutto, solo su errori temporanei.
 _RETRY_WAITS_SECONDS = (5, 15)
 
-# Causa piu' probabile dei codici d'errore Azure visti in pratica.
+# Codici d'errore Azure.
 _AZURE_ERROR_HINTS = {
     "AuthorizationFailure": "firewall dello storage account: l'IP di uscita di CDP non e' ammesso",
     "AuthenticationFailed": "SAS token non valido o scaduto",
