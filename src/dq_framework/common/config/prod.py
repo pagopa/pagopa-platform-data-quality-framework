@@ -15,7 +15,7 @@ PROD_CONFIG = AppConfig(
     # comunque no-op. Valorizzare solo se si vuole che il primo run la crei su un path S3 specifico,
     # es. "s3a://pdnd-prod-dl-1/warehouse/tablespace/external/hive/pagopa_qa.db/silver_dqf_gpd_results"
     results_table_location=None,
-    # TODO: storage account Azure di produzione per l'export verso Superset.
-    # Finche' resta None l'export in prod viene saltato anche con il flag acceso.
-    blob_export_account=None,
+    # Per ora prod esporta sullo storage di UAT, letto dal Superset di UAT.
+    # TODO: storage account Azure di produzione quando sara' disponibile.
+    ext_storage_account="pagopauitnqadqfsa",
 )

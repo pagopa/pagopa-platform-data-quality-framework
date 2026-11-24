@@ -88,10 +88,10 @@ def export_to_blob(
             f"le tabelle Iceberg non sono state scritte."
         )
         return
-    if not config.blob_export_account:
+    if not config.ext_storage_account:
         logger.error(
             f"Export verso Azure Blob attivo ma nessuno storage account configurato per env={config.env} "
-            f"(AppConfig.blob_export_account): export saltato."
+            f"(AppConfig.ext_storage_account): export saltato."
         )
         return
 
@@ -113,11 +113,11 @@ def export_to_blob(
                 table_df = spark.table(fqn)
                 n_rows, data = dataframe_to_parquet(table_df.where(table_df["dataset"] == dataset))
                 status = upload_blob(
-                    config.blob_export_account, config.blob_export_container, blob_name, data, sas_token
+                    config.ext_storage_account, config.ext_storage_container, blob_name, data, sas_token
                 )
                 logger.info(
                     f"Export Azure Blob {fqn} [{dataset}]: {n_rows} righe, {len(data)} B -> "
-                    f"{config.blob_export_container}/{blob_name} (HTTP {status})"
+                    f"{config.ext_storage_container}/{blob_name} (HTTP {status})"
                 )
             except urllib.error.HTTPError as e:
                 logger.error(f"Export Azure Blob rifiutato per {fqn} [{dataset}]: {_describe_http_error(e)}")

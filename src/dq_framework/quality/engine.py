@@ -54,8 +54,8 @@ def run_pipeline(
     primary_keys:              Optional[list[str]] = None,
     xref_datasets:             Optional[list[str]] = None,
     soda_cloud_enabled:        bool                = False,
-    blob_export_enabled:       bool                = False,
-    blob_export_failed_records_enabled: bool       = False,
+    ext_storage_export_results_enabled:        bool = False,
+    ext_storage_export_failed_records_enabled: bool = False,
 ) -> None:
     source_desc = f"{repository}@{ref}:{contract_path}" if repository else contract_path
     logger.info(
@@ -146,17 +146,18 @@ def run_pipeline(
         )
 
         # Export verso Azure Blob (Superset)
-        if blob_export_enabled:
+        if ext_storage_export_results_enabled:
             export_to_blob(
                 spark, config, domain, dl_layer,
                 datasets               = sorted({r.dataset for r in final_result_rows}),
-                include_failed_records = blob_export_failed_records_enabled,
+                include_failed_records = ext_storage_export_failed_records_enabled,
             )
         else:
             logger.info("Export verso Azure Blob DISATTIVATO da configurazione: nessun file scritto.")
-            if blob_export_failed_records_enabled:
+            if ext_storage_export_failed_records_enabled:
                 logger.warning(
-                    "blob_export_failed_records_enabled=True ignorato: vale solo con blob_export_enabled=True."
+                    "ext_storage_export_failed_records_enabled=True ignorato: "
+                    "vale solo con ext_storage_export_results_enabled=True."
                 )
     else:
         raise ScanExecutionError(

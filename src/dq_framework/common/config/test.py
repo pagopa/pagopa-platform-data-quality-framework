@@ -17,5 +17,5 @@ TEST_CONFIG = AppConfig(
     results_table_location=None,
     # Export disattivato: lo storage di UAT riceve i dati di prod e test scriverebbe
     # sugli stessi blob (stesso dominio e dataset), sovrascrivendoli.
-    blob_export_account=None,
+    ext_storage_account=None,
 )

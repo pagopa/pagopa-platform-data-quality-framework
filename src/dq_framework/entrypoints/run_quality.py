@@ -237,7 +237,7 @@ def _parse_args(
         ),
     )
     parser.add_argument(
-        "--blob-export-enabled",
+        "--ext-storage-export-results-enabled",
         type=_parse_bool,
         default=False,
         help=(
@@ -249,12 +249,12 @@ def _parse_args(
         ),
     )
     parser.add_argument(
-        "--blob-export-failed-records-enabled",
+        "--ext-storage-export-failed-records-enabled",
         type=_parse_bool,
         default=False,
         help=(
             "Esporta su Azure Blob anche la tabella failed_records, che contiene valori "
-            "reali dei record (PII). Vale solo con --blob-export-enabled=true. "
+            "reali dei record (PII). Vale solo con --ext-storage-export-results-enabled=true. "
             "Default: false, da accendere solo con l'approvazione del cliente."
         ),
     )
@@ -296,8 +296,8 @@ def _run(args: argparse.Namespace, config) -> None:
         primary_keys              = args.primary_keys,
         xref_datasets             = args.xref_datasets,
         soda_cloud_enabled        = args.soda_cloud_enabled,
-        blob_export_enabled       = args.blob_export_enabled,
-        blob_export_failed_records_enabled = args.blob_export_failed_records_enabled,
+        ext_storage_export_results_enabled        = args.ext_storage_export_results_enabled,
+        ext_storage_export_failed_records_enabled = args.ext_storage_export_failed_records_enabled,
     )
 
 
