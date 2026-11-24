@@ -145,20 +145,13 @@ def run_pipeline(
             spark, final_result_rows, sampler, config, effective_primary_keys, domain, dl_layer
         )
 
-        # Export verso Azure Blob (Superset)
-        if ext_storage_export_results_enabled:
-            export_to_blob(
-                spark, config, domain, dl_layer,
-                datasets               = sorted({r.dataset for r in final_result_rows}),
-                include_failed_records = ext_storage_export_failed_records_enabled,
-            )
-        else:
-            logger.info("Export verso Azure Blob DISATTIVATO da configurazione: nessun file scritto.")
-            if ext_storage_export_failed_records_enabled:
-                logger.warning(
-                    "ext_storage_export_failed_records_enabled=True ignorato: "
-                    "vale solo con ext_storage_export_results_enabled=True."
-                )
+        # Export verso Azure Blob (Superset): flag e logica in observability.blob_export
+        export_to_blob(
+            spark, config, domain, dl_layer,
+            datasets               = sorted({r.dataset for r in final_result_rows}),
+            enabled                = ext_storage_export_results_enabled,
+            include_failed_records = ext_storage_export_failed_records_enabled,
+        )
     else:
         raise ScanExecutionError(
             f"Nessun risultato elaborato per {contract['contract_title']}: "

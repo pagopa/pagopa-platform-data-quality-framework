@@ -74,14 +74,25 @@ def export_to_blob(
     domain: str,
     dl_layer: str,
     datasets: list[str],
+    enabled: bool = False,
     include_failed_records: bool = False,
 ) -> None:
     """Esporta su Azure Blob lo storico completo dei `datasets` del run.
 
     Non solleva mai: ogni errore viene loggato e il run di quality prosegue.
-    `include_failed_records` aggiunge la tabella failed_records, che contiene
-    valori reali dei record: il default e' False.
+    `enabled` (--ext-storage-export-results-enabled) attiva l'export: con False
+    non viene scritto nulla. `include_failed_records`
+    (--ext-storage-export-failed-records-enabled) aggiunge la tabella
+    failed_records, che contiene valori reali dei record: il default e' False.
     """
+    if not enabled:
+        logger.info("Export verso Azure Blob DISATTIVATO da configurazione: nessun file scritto.")
+        if include_failed_records:
+            logger.warning(
+                "ext_storage_export_failed_records_enabled=True ignorato: "
+                "vale solo con ext_storage_export_results_enabled=True."
+            )
+        return
     if not config.results_write_enabled:
         logger.info(
             f"results_write_enabled=False (env={config.env}): export verso Azure Blob saltato, "
